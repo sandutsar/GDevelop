@@ -19,7 +19,7 @@
     "iso-639-1": "^2.0.3",
     "minimist": "1.2.5",
     "prettier": "1.15.3",
-    "react-scripts": "3.4.0",
+    "react-scripts": "5.0.1",
     "recursive-copy": "^2.0.10",
     "recursive-readdir": "^2.2.2",
     "shelljs": "0.8.4",
