@@ -13,13 +13,22 @@ import { MarkdownText } from './MarkdownText';
 import Autocomplete from '@material-ui/lab/Autocomplete';
 import ListItem from '@material-ui/core/ListItem';
 import { computeTextFieldStyleProps } from './TextField';
+import { type FieldFocusFunction } from '../EventsSheet/ParameterFields/ParameterFieldCommons';
 import { makeStyles } from '@material-ui/core/styles';
 import muiZIndex from '@material-ui/core/styles/zIndex';
 import {
   shouldCloseOrCancel,
   shouldSubmit,
+  shouldValidate,
 } from './KeyboardShortcuts/InteractionKeys';
-import { textEllispsisStyle } from './TextEllipsis';
+import { textEllipsisStyle } from './TextEllipsis';
+import Paper from './Paper';
+
+export const AutocompletePaperComponent = (props: any) => (
+  // Use light background so that it's in contrast with background that
+  // is either dark or medium (in dialogs).
+  <Paper {...props} background="light" />
+);
 
 type Option =
   | {|
@@ -29,7 +38,7 @@ type Option =
       text: string, // The text used for filtering. If empty, item is always shown.
       value: string, // The value to show on screen and to be selected
       translatableValue?: MessageDescriptor,
-      onClick?: () => void, // If defined, will be called when the item is clicked. onChange/onChoose won't be called.
+      onClick?: () => void | Promise<void>, // If defined, will be called when the item is clicked. onChange/onChoose won't be called.
       renderIcon?: ?() => React.Element<typeof ListIcon | typeof SvgIcon>,
     |};
 
@@ -41,8 +50,10 @@ type Props = {|
   onChoose?: string => void,
   dataSource: DataSource,
 
-  id?: string,
+  id?: ?string,
   onBlur?: (event: SyntheticFocusEvent<HTMLInputElement>) => void,
+  onClick?: (event: SyntheticPointerEvent<HTMLInputElement>) => void,
+  commitOnInputChange?: boolean,
   onRequestClose?: () => void,
   onApply?: () => void,
   errorText?: React.Node,
@@ -55,14 +66,15 @@ type Props = {|
   textFieldStyle?: Object,
   openOnFocus?: boolean,
   style?: Object,
+  inputStyle?: Object,
 |};
 
 export type SemiControlledAutoCompleteInterface = {|
-  focus: () => void,
+  focus: FieldFocusFunction,
   forceInputValueTo: (newValue: string) => void,
 |};
 
-const styles = {
+export const autocompleteStyles = {
   container: {
     position: 'relative',
     width: '100%',
@@ -72,6 +84,7 @@ const styles = {
     padding: 0,
     margin: 0,
   },
+  listbox: { padding: 0, margin: 0 },
   listItemText: {
     margin: '1px 0',
   },
@@ -81,10 +94,7 @@ const useStyles = makeStyles({
   option: {
     cursor: 'default',
   },
-  listbox: {
-    padding: 0,
-    margin: 0,
-  },
+  listbox: autocompleteStyles.listbox,
   input: {
     width: 'auto',
     flexGrow: 1,
@@ -107,7 +117,7 @@ const makeRenderItem = (i18n: I18nType) => (
         divider
         disableGutters
         component={'div'}
-        style={styles.listItem}
+        style={autocompleteStyles.listItem}
       />
     );
   }
@@ -116,12 +126,16 @@ const makeRenderItem = (i18n: I18nType) => (
     ? i18n._(option.translatableValue)
     : option.value;
   return (
-    <ListItem dense={true} component={'div'} style={styles.listItem}>
+    <ListItem
+      dense={true}
+      component={'div'}
+      style={autocompleteStyles.listItem}
+    >
       {option.renderIcon && <ListItemIcon>{option.renderIcon()}</ListItemIcon>}
       <ListItemText
-        style={styles.listItemText}
+        style={autocompleteStyles.listItemText}
         primary={
-          <div title={value} style={textEllispsisStyle}>
+          <div title={value} style={textEllipsisStyle}>
             {value}
           </div>
         }
@@ -203,6 +217,7 @@ const getDefaultStylingProps = (params: Object, props: Props): Object => {
       ...InputProps,
       className: null,
       endAdornment: null,
+      style: props.inputStyle,
     },
     inputProps: {
       ...inputProps,
@@ -219,6 +234,11 @@ const getDefaultStylingProps = (params: Object, props: Props): Object => {
 
           if (props.onApply) props.onApply();
           else if (props.onRequestClose) props.onRequestClose();
+        } else if (shouldValidate(event)) {
+          // Make sure the current value is reported to the parent.
+          // Otherwise a parent like an InlineParameterEditor would close when detecting
+          // the validation (Enter key pressed) without having the latest value.
+          props.onChange(event.currentTarget.value);
         }
       },
     },
@@ -229,16 +249,24 @@ const getOptionLabel = (option: Option, value: string): string =>
   option.value ? option.value : value;
 
 export default React.forwardRef<Props, SemiControlledAutoCompleteInterface>(
-  function SemiControlledAutoComplete(props: Props, ref) {
+  function SemiControlledAutoComplete(props, ref) {
     const input = React.useRef((null: ?HTMLInputElement));
     const [inputValue, setInputValue] = useState((null: string | null));
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const classes = useStyles();
 
+    const focus: FieldFocusFunction = options => {
+      const inputElement = input.current;
+      if (inputElement) {
+        inputElement.focus();
+        if (options && options.selectAll) {
+          inputElement.select();
+        }
+      }
+    };
+
     React.useImperativeHandle(ref, () => ({
-      focus: () => {
-        if (input.current) input.current.focus();
-      },
+      focus,
       forceInputValueTo: (newValue: string) => {
         if (inputValue !== null) setInputValue(newValue);
       },
@@ -257,6 +285,7 @@ export default React.forwardRef<Props, SemiControlledAutoCompleteInterface>(
     ): void => {
       setInputValue(value);
       if (!isMenuOpen) setIsMenuOpen(true);
+      if (props.commitOnInputChange) props.onChange(value);
     };
 
     return (
@@ -278,11 +307,12 @@ export default React.forwardRef<Props, SemiControlledAutoCompleteInterface>(
             open={isMenuOpen}
             style={{
               ...props.style,
-              ...styles.container,
+              ...autocompleteStyles.container,
             }}
             inputValue={currentInputValue}
             value={currentInputValue}
             onInputChange={handleInputChange}
+            PaperComponent={AutocompletePaperComponent}
             options={props.dataSource}
             renderOption={makeRenderItem(i18n)}
             getOptionDisabled={isOptionDisabled}
@@ -292,6 +322,7 @@ export default React.forwardRef<Props, SemiControlledAutoCompleteInterface>(
             filterOptions={(options: DataSource, state) =>
               filterFunction(options, state, currentInputValue)
             }
+            id={props.id}
             renderInput={params => {
               const {
                 InputProps,
@@ -300,6 +331,7 @@ export default React.forwardRef<Props, SemiControlledAutoCompleteInterface>(
               } = getDefaultStylingProps(params, props);
               return (
                 <TextField
+                  color="secondary"
                   InputProps={{
                     ...InputProps,
                     placeholder:
@@ -309,6 +341,7 @@ export default React.forwardRef<Props, SemiControlledAutoCompleteInterface>(
                   }}
                   inputProps={{
                     ...inputProps,
+                    onClick: props.onClick,
                     onFocus: (
                       event: SyntheticFocusEvent<HTMLInputElement>
                     ): void => {

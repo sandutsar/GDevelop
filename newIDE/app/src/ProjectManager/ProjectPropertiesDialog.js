@@ -1,13 +1,14 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import { t } from '@lingui/macro';
+import { type I18n as I18nType } from '@lingui/core';
 
 import * as React from 'react';
 import FlatButton from '../UI/FlatButton';
 import Checkbox from '../UI/Checkbox';
 import SelectField from '../UI/SelectField';
 import SelectOption from '../UI/SelectOption';
-import Dialog from '../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import SemiControlledTextField from '../UI/SemiControlledTextField';
 import {
   getProjectPropertiesErrors,
@@ -24,33 +25,27 @@ import RaisedButton from '../UI/RaisedButton';
 import Window from '../Utils/Window';
 import { I18n } from '@lingui/react';
 import AlertMessage from '../UI/AlertMessage';
-import { GameRegistration } from '../GameDashboard/GameRegistration';
-import { Tab, Tabs } from '../UI/Tabs';
+import { Tabs } from '../UI/Tabs';
 import { LoadingScreenEditor } from './LoadingScreenEditor';
-import {
-  type ResourceSource,
-  type ChooseResourceFunction,
-} from '../ResourcesList/ResourceSource';
-import { type ResourceExternalEditor } from '../ResourcesList/ResourceExternalEditor.flow';
-import {
-  type HotReloadPreviewButtonProps,
-  NewPreviewIcon,
-} from '../HotReload/HotReloadPreviewButton';
-import { UsersAutocomplete } from '../Utils/UsersAutocomplete';
+import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
+import { type HotReloadPreviewButtonProps } from '../HotReload/HotReloadPreviewButton';
+import PublicGameProperties from '../GameDashboard/PublicGameProperties';
+import PreviewIcon from '../UI/CustomSvgIcons/Preview';
+import { useResponsiveWindowSize } from '../UI/Responsive/ResponsiveWindowMeasurer';
+import ErrorBoundary from '../UI/ErrorBoundary';
 
 type Props = {|
   project: gdProject,
   open: boolean,
   initialTab: 'properties' | 'loading-screen',
-  onClose: Function,
-  onApply: Function,
-  onChangeSubscription: () => void,
+  onClose: () => void,
+  onApply: (options: { newName?: string }) => Promise<boolean>,
+  onPropertiesApplied: (options: { newName?: string }) => void,
   hotReloadPreviewButtonProps?: ?HotReloadPreviewButtonProps,
+  i18n: I18nType,
 
   // For resources:
-  resourceSources: Array<ResourceSource>,
-  onChooseResource: ChooseResourceFunction,
-  resourceExternalEditors: Array<ResourceExternalEditor>,
+  resourceManagementProps: ResourceManagementProps,
 |};
 
 type ProjectProperties = {|
@@ -58,51 +53,62 @@ type ProjectProperties = {|
   gameResolutionHeight: number,
   adaptGameResolutionAtRuntime: boolean,
   name: string,
+  description: string,
   author: string,
-  authorIds: gdVectorString,
+  authorIds: string[],
+  authorUsernames: string[],
   version: string,
   packageName: string,
   orientation: string,
   scaleMode: string,
   pixelsRounding: boolean,
   sizeOnStartupMode: string,
+  antialiasingMode: string,
+  isAntialisingEnabledOnMobile: boolean,
   minFPS: number,
   maxFPS: number,
   isFolderProject: boolean,
   useDeprecatedZeroAsDefaultZOrder: boolean,
 |};
 
-function loadPropertiesFromProject(project: gdProject): ProjectProperties {
+const loadPropertiesFromProject = (project: gdProject): ProjectProperties => {
   return {
     gameResolutionWidth: project.getGameResolutionWidth(),
     gameResolutionHeight: project.getGameResolutionHeight(),
     adaptGameResolutionAtRuntime: project.getAdaptGameResolutionAtRuntime(),
     name: project.getName(),
+    description: project.getDescription(),
     author: project.getAuthor(),
-    authorIds: project.getAuthorIds(),
+    authorIds: project.getAuthorIds().toJSArray(),
+    authorUsernames: project.getAuthorUsernames().toJSArray(),
     version: project.getVersion(),
     packageName: project.getPackageName(),
     orientation: project.getOrientation(),
     scaleMode: project.getScaleMode(),
     pixelsRounding: project.getPixelsRounding(),
     sizeOnStartupMode: project.getSizeOnStartupMode(),
+    antialiasingMode: project.getAntialiasingMode(),
+    isAntialisingEnabledOnMobile: project.isAntialisingEnabledOnMobile(),
     minFPS: project.getMinimumFPS(),
     maxFPS: project.getMaximumFPS(),
     isFolderProject: project.isFolderProject(),
     useDeprecatedZeroAsDefaultZOrder: project.getUseDeprecatedZeroAsDefaultZOrder(),
   };
-}
+};
 
 function applyPropertiesToProject(
   project: gdProject,
+  i18n: I18nType,
   newProperties: ProjectProperties
 ) {
-  const t = str => str; //TODO
   const {
     gameResolutionWidth,
     gameResolutionHeight,
     adaptGameResolutionAtRuntime,
     name,
+    description,
+    authorIds,
+    authorUsernames,
     author,
     version,
     packageName,
@@ -110,6 +116,8 @@ function applyPropertiesToProject(
     scaleMode,
     pixelsRounding,
     sizeOnStartupMode,
+    antialiasingMode,
+    isAntialisingEnabledOnMobile,
     minFPS,
     maxFPS,
     isFolderProject,
@@ -118,6 +126,15 @@ function applyPropertiesToProject(
   project.setGameResolutionSize(gameResolutionWidth, gameResolutionHeight);
   project.setAdaptGameResolutionAtRuntime(adaptGameResolutionAtRuntime);
   project.setName(name);
+  project.setDescription(description);
+  const projectAuthorIds = project.getAuthorIds();
+  projectAuthorIds.clear();
+  authorIds.forEach(authorId => projectAuthorIds.push_back(authorId));
+  const projectAuthorUsernames = project.getAuthorUsernames();
+  projectAuthorUsernames.clear();
+  authorUsernames.forEach(authorUsername =>
+    projectAuthorUsernames.push_back(authorUsername)
+  );
   project.setAuthor(author);
   project.setVersion(version);
   project.setPackageName(packageName);
@@ -125,15 +142,20 @@ function applyPropertiesToProject(
   project.setScaleMode(scaleMode);
   project.setPixelsRounding(pixelsRounding);
   project.setSizeOnStartupMode(sizeOnStartupMode);
+  project.setAntialiasingMode(antialiasingMode);
+  project.setAntialisingEnabledOnMobile(isAntialisingEnabledOnMobile);
   project.setMinimumFPS(minFPS);
   project.setMaximumFPS(maxFPS);
   project.setFolderProject(isFolderProject);
   project.setUseDeprecatedZeroAsDefaultZOrder(useDeprecatedZeroAsDefaultZOrder);
 
-  return displayProjectErrorsBox(t, getProjectPropertiesErrors(t, project));
+  return displayProjectErrorsBox(
+    i18n,
+    getProjectPropertiesErrors(i18n, project)
+  );
 }
 
-function ProjectPropertiesDialog(props: Props) {
+const ProjectPropertiesDialog = (props: Props) => {
   const { project, hotReloadPreviewButtonProps } = props;
 
   const initialProperties = React.useMemo(
@@ -141,6 +163,13 @@ function ProjectPropertiesDialog(props: Props) {
     [project]
   );
   let [name, setName] = React.useState(initialProperties.name);
+  let [description, setDescription] = React.useState(
+    initialProperties.description
+  );
+  let [authorIds, setAuthorIds] = React.useState(initialProperties.authorIds);
+  let [authorUsernames, setAuthorUsernames] = React.useState(
+    initialProperties.authorUsernames
+  );
   let [gameResolutionWidth, setGameResolutionWidth] = React.useState(
     initialProperties.gameResolutionWidth
   );
@@ -166,6 +195,13 @@ function ProjectPropertiesDialog(props: Props) {
   let [sizeOnStartupMode, setSizeOnStartupMode] = React.useState(
     initialProperties.sizeOnStartupMode
   );
+  let [antialiasingMode, setAntialiasingMode] = React.useState(
+    initialProperties.antialiasingMode
+  );
+  let [
+    isAntialisingEnabledOnMobile,
+    setAntialisingEnabledOnMobile,
+  ] = React.useState(initialProperties.isAntialisingEnabledOnMobile);
   let [minFPS, setMinFPS] = React.useState(initialProperties.minFPS);
   let [maxFPS, setMaxFPS] = React.useState(initialProperties.maxFPS);
   let [isFolderProject, setIsFolderProject] = React.useState(
@@ -176,6 +212,8 @@ function ProjectPropertiesDialog(props: Props) {
     setUseDeprecatedZeroAsDefaultZOrder,
   ] = React.useState(initialProperties.useDeprecatedZeroAsDefaultZOrder);
 
+  const { isMobile } = useResponsiveWindowSize();
+
   const defaultPackageName = 'com.example.mygame';
   const defaultVersion = '1.0.0';
 
@@ -183,37 +221,58 @@ function ProjectPropertiesDialog(props: Props) {
     'properties' | 'loading-screen'
   >(props.initialTab);
 
-  const onCancelLoadingScreenChanges = useSerializableObjectCancelableEditor({
+  const {
+    onCancelChanges: onCancelLoadingScreenChanges,
+    notifyOfChange: notifyOfLoadingScreenChange,
+  } = useSerializableObjectCancelableEditor({
     serializableObject: project.getLoadingScreen(),
     onCancel: props.onClose,
   });
-  const onCancelChanges = useSerializableObjectCancelableEditor({
+  const {
+    onCancelChanges,
+    notifyOfChange,
+  } = useSerializableObjectCancelableEditor({
     serializableObject: project.getExtensionProperties(),
     onCancel: onCancelLoadingScreenChanges,
   });
 
-  const onApply = () => {
-    if (
-      applyPropertiesToProject(project, {
+  const onApply = async () => {
+    const specialPropertiesChanged =
+      name !== initialProperties.name ? { newName: name } : {};
+
+    const proceed = await props.onApply(specialPropertiesChanged);
+    if (!proceed) return;
+
+    const wasProjectPropertiesApplied = applyPropertiesToProject(
+      project,
+      props.i18n,
+      {
         gameResolutionWidth,
         gameResolutionHeight,
         adaptGameResolutionAtRuntime,
         name,
+        description,
         author,
-        authorIds: project.getAuthorIds(),
+        authorIds,
+        authorUsernames,
         version,
         packageName,
         orientation,
         scaleMode,
         pixelsRounding,
+        antialiasingMode,
+        isAntialisingEnabledOnMobile,
         sizeOnStartupMode,
         minFPS,
         maxFPS,
         isFolderProject,
         useDeprecatedZeroAsDefaultZOrder,
-      })
-    )
-      props.onApply();
+      }
+    );
+
+    if (wasProjectPropertiesApplied) {
+      props.onPropertiesApplied(specialPropertiesChanged);
+    }
   };
 
   return (
@@ -221,7 +280,8 @@ function ProjectPropertiesDialog(props: Props) {
       {({ i18n }) => (
         <React.Fragment>
           <Dialog
-            onApply={onApply}
+            id="project-properties-dialog"
+            title={<Trans>Game properties</Trans>}
             actions={[
               <FlatButton
                 label={<Trans>Cancel</Trans>}
@@ -229,7 +289,8 @@ function ProjectPropertiesDialog(props: Props) {
                 onClick={onCancelChanges}
                 key="cancel"
               />,
-              <FlatButton
+              <DialogPrimaryButton
+                id="apply-button"
                 label={<Trans>Apply</Trans>}
                 primary={true}
                 onClick={onApply}
@@ -244,54 +305,82 @@ function ProjectPropertiesDialog(props: Props) {
               hotReloadPreviewButtonProps ? (
                 <FlatButton
                   key="hot-reload-preview-button"
-                  icon={<NewPreviewIcon />}
-                  label={<Trans>Run a preview (with loading screen)</Trans>}
+                  leftIcon={<PreviewIcon />}
+                  label={
+                    isMobile ? (
+                      <Trans>Preview</Trans>
+                    ) : (
+                      <Trans>Run a preview (with loading & branding)</Trans>
+                    )
+                  }
                   onClick={
                     hotReloadPreviewButtonProps.launchProjectWithLoadingScreenPreview
                   }
                 />
               ) : null,
             ]}
-            noTitleMargin
-            open={props.open}
             onRequestClose={onCancelChanges}
+            onApply={onApply}
+            open={props.open}
             fullHeight
-            flexBody
-            title={
-              <div>
-                <Tabs value={currentTab} onChange={setCurrentTab}>
-                  <Tab
-                    label={<Trans>Properties</Trans>}
-                    value={'properties'}
-                    key={'properties'}
-                  />
-                  <Tab
-                    label={<Trans>Loading Screen</Trans>}
-                    value={'loading-screen'}
-                    key={'loading-screen'}
-                  />
-                </Tabs>
-              </div>
+            fixedContent={
+              <Tabs
+                value={currentTab}
+                onChange={setCurrentTab}
+                options={[
+                  { label: <Trans>Properties</Trans>, value: 'properties' },
+                  {
+                    label: <Trans>Branding and Loading screen</Trans>,
+                    value: 'loading-screen',
+                  },
+                ]}
+              />
             }
           >
             {currentTab === 'properties' && (
               <ColumnStackLayout expand noMargin>
-                <SemiControlledTextField
-                  floatingLabelText={<Trans>Game name</Trans>}
-                  fullWidth
-                  type="text"
-                  value={name}
-                  onChange={setName}
-                  autoFocus
+                <Text size="block-title">
+                  <Trans>Game Info</Trans>
+                </Text>
+                <PublicGameProperties
+                  name={name}
+                  setName={newName => {
+                    if (newName.trim() === name) {
+                      return;
+                    }
+                    setName(newName.trim());
+                    notifyOfChange();
+                  }}
+                  description={description}
+                  setDescription={newDescription => {
+                    if (newDescription === description) {
+                      return;
+                    }
+                    setDescription(newDescription.trim());
+                    notifyOfChange();
+                  }}
+                  project={project}
+                  authorIds={authorIds}
+                  setAuthorIds={newAuthorIds => {
+                    setAuthorIds(newAuthorIds);
+                    notifyOfChange();
+                  }}
+                  setAuthorUsernames={newAuthorUsernames => {
+                    setAuthorUsernames(newAuthorUsernames);
+                    notifyOfChange();
+                  }}
+                  orientation={orientation}
+                  setOrientation={newOrientation => {
+                    if (newOrientation === orientation) {
+                      return;
+                    }
+                    setOrientation(newOrientation);
+                    notifyOfChange();
+                  }}
                 />
-                <SemiControlledTextField
-                  floatingLabelText={<Trans>Version number (X.Y.Z)</Trans>}
-                  fullWidth
-                  hintText={defaultVersion}
-                  type="text"
-                  value={version}
-                  onChange={setVersion}
-                />
+                <Text size="block-title">
+                  <Trans>Packaging</Trans>
+                </Text>
                 <SemiControlledTextField
                   floatingLabelText={
                     <Trans>Package name (for iOS and Android)</Trans>
@@ -300,7 +389,13 @@ function ProjectPropertiesDialog(props: Props) {
                   hintText={defaultPackageName}
                   type="text"
                   value={packageName}
-                  onChange={setPackageName}
+                  onChange={newPackageName => {
+                    if (newPackageName === packageName) {
+                      return;
+                    }
+                    setPackageName(newPackageName);
+                    notifyOfChange();
+                  }}
                   errorText={
                     validatePackageName(packageName) ? (
                       undefined
@@ -313,20 +408,40 @@ function ProjectPropertiesDialog(props: Props) {
                     )
                   }
                 />
-                <UsersAutocomplete
-                  userIds={project.getAuthorIds()}
-                  floatingLabelText={<Trans>Authors</Trans>}
-                  helperText={
-                    <Trans>
-                      Select the usernames of the authors of this project. They
-                      will be displayed in the selected order, if you publish
-                      this game as an example or in the community.
-                    </Trans>
-                  }
+                <SemiControlledTextField
+                  floatingLabelText={<Trans>Version number (X.Y.Z)</Trans>}
+                  fullWidth
+                  hintText={defaultVersion}
+                  type="text"
+                  value={version}
+                  onChange={newVersion => {
+                    if (newVersion === version) {
+                      return;
+                    }
+                    setVersion(newVersion);
+                    notifyOfChange();
+                  }}
+                />
+                <SemiControlledTextField
+                  floatingLabelText={<Trans>Publisher name</Trans>}
+                  fullWidth
+                  translatableHintText={t`Your name`}
+                  helperMarkdownText={i18n._(
+                    t`This will be used when packaging and submitting your application to the stores.`
+                  )}
+                  type="text"
+                  value={author}
+                  onChange={newAuthor => {
+                    if (newAuthor === author) {
+                      return;
+                    }
+                    setAuthor(newAuthor);
+                    notifyOfChange();
+                  }}
                 />
                 {useDeprecatedZeroAsDefaultZOrder ? (
                   <React.Fragment>
-                    <Text size="title">
+                    <Text size="block-title">
                       <Trans>Z Order of objects created from events</Trans>
                     </Text>
                     <AlertMessage kind="info">
@@ -346,12 +461,13 @@ function ProjectPropertiesDialog(props: Props) {
                       onClick={() => {
                         const answer = Window.showConfirmDialog(
                           i18n._(
-                            t`Make sure to verify all your events creating objects, and optionally add an action to set the Z order back to 0 if it's important for your game. Do you want to continue (recommened)?`
+                            t`Make sure to verify all your events creating objects, and optionally add an action to set the Z order back to 0 if it's important for your game. Do you want to continue (recommended)?`
                           )
                         );
                         if (!answer) return;
 
                         setUseDeprecatedZeroAsDefaultZOrder(false);
+                        notifyOfChange();
                       }}
                       label={
                         <Trans>
@@ -362,34 +478,49 @@ function ProjectPropertiesDialog(props: Props) {
                     />
                   </React.Fragment>
                 ) : null}
-                <Text size="title">
-                  <Trans>Analytics</Trans>
-                </Text>
-                <GameRegistration project={project} />
-                <Text size="title">
+                <Text size="block-title">
                   <Trans>Resolution and rendering</Trans>
                 </Text>
                 <ResponsiveLineStackLayout noMargin>
                   <SemiControlledTextField
+                    id="game-resolution-width"
                     floatingLabelText={<Trans>Game resolution width</Trans>}
                     fullWidth
                     type="number"
                     value={'' + gameResolutionWidth}
-                    onChange={value =>
-                      setGameResolutionWidth(Math.max(1, parseInt(value, 10)))
-                    }
+                    onChange={value => {
+                      const newResolutionWidth = Math.max(
+                        1,
+                        parseInt(value, 10)
+                      );
+                      if (newResolutionWidth === gameResolutionWidth) {
+                        return;
+                      }
+                      setGameResolutionWidth(newResolutionWidth);
+                      notifyOfChange();
+                    }}
                   />
                   <SemiControlledTextField
+                    id="game-resolution-height"
                     floatingLabelText={<Trans>Game resolution height</Trans>}
                     fullWidth
                     type="number"
                     value={'' + gameResolutionHeight}
-                    onChange={value =>
-                      setGameResolutionHeight(Math.max(1, parseInt(value, 10)))
-                    }
+                    onChange={value => {
+                      const newResolutionHeight = Math.max(
+                        1,
+                        parseInt(value, 10)
+                      );
+                      if (newResolutionHeight === gameResolutionHeight) {
+                        return;
+                      }
+                      setGameResolutionHeight(newResolutionHeight);
+                      notifyOfChange();
+                    }}
                   />
                 </ResponsiveLineStackLayout>
                 <SelectField
+                  id="game-resolution-resize-mode"
                   fullWidth
                   floatingLabelText={
                     <Trans>
@@ -397,21 +528,25 @@ function ProjectPropertiesDialog(props: Props) {
                     </Trans>
                   }
                   value={sizeOnStartupMode}
-                  onChange={(e, i, value: string) =>
-                    setSizeOnStartupMode(value)
-                  }
+                  onChange={(e, i, newSizeOnStartupMode: string) => {
+                    if (newSizeOnStartupMode === sizeOnStartupMode) {
+                      return;
+                    }
+                    setSizeOnStartupMode(newSizeOnStartupMode);
+                    notifyOfChange();
+                  }}
                 >
                   <SelectOption
                     value=""
-                    primaryText={t`No changes to the game size`}
+                    label={t`No changes to the game size`}
                   />
                   <SelectOption
                     value="adaptWidth"
-                    primaryText={t`Change width to fit the screen or window size`}
+                    label={t`Change width to fit the screen or window size`}
                   />
                   <SelectOption
                     value="adaptHeight"
-                    primaryText={t`Change height to fit the screen or window size`}
+                    label={t`Change height to fit the screen or window size`}
                   />
                 </SelectField>
                 <Checkbox
@@ -423,9 +558,10 @@ function ProjectPropertiesDialog(props: Props) {
                   }
                   disabled={sizeOnStartupMode === ''}
                   checked={adaptGameResolutionAtRuntime}
-                  onCheck={(e, checked) =>
-                    setAdaptGameResolutionAtRuntime(checked)
-                  }
+                  onCheck={(e, checked) => {
+                    setAdaptGameResolutionAtRuntime(checked);
+                    notifyOfChange();
+                  }}
                 />
                 <ResponsiveLineStackLayout noMargin>
                   <SemiControlledTextField
@@ -433,9 +569,14 @@ function ProjectPropertiesDialog(props: Props) {
                     fullWidth
                     type="number"
                     value={'' + minFPS}
-                    onChange={value =>
-                      setMinFPS(Math.max(0, parseInt(value, 10)))
-                    }
+                    onChange={value => {
+                      const newMinFPS = Math.max(0, parseInt(value, 10));
+                      if (newMinFPS === minFPS) {
+                        return;
+                      }
+                      setMinFPS(newMinFPS);
+                      notifyOfChange();
+                    }}
                   />
                   <SemiControlledTextField
                     floatingLabelText={
@@ -444,9 +585,14 @@ function ProjectPropertiesDialog(props: Props) {
                     fullWidth
                     type="number"
                     value={'' + maxFPS}
-                    onChange={value =>
-                      setMaxFPS(Math.max(0, parseInt(value, 10)))
-                    }
+                    onChange={value => {
+                      const newMaxFPS = Math.max(0, parseInt(value, 10));
+                      if (newMaxFPS === maxFPS) {
+                        return;
+                      }
+                      setMaxFPS(newMaxFPS);
+                      notifyOfChange();
+                    }}
                   />
                 </ResponsiveLineStackLayout>
                 {maxFPS > 0 && maxFPS < 60 && (
@@ -482,33 +628,24 @@ function ProjectPropertiesDialog(props: Props) {
                 <SelectField
                   fullWidth
                   floatingLabelText={
-                    <Trans>Device orientation (for iOS and Android)</Trans>
-                  }
-                  value={orientation}
-                  onChange={(e, i, value: string) => setOrientation(value)}
-                >
-                  <SelectOption
-                    value="default"
-                    primaryText={t`Platform default`}
-                  />
-                  <SelectOption value="landscape" primaryText={t`Landscape`} />
-                  <SelectOption value="portrait" primaryText={t`Portrait`} />
-                </SelectField>
-                <SelectField
-                  fullWidth
-                  floatingLabelText={
                     <Trans>Scale mode (also called "Sampling")</Trans>
                   }
                   value={scaleMode}
-                  onChange={(e, i, value: string) => setScaleMode(value)}
+                  onChange={(e, i, newScaleMode: string) => {
+                    if (newScaleMode === scaleMode) {
+                      return;
+                    }
+                    setScaleMode(newScaleMode);
+                    notifyOfChange();
+                  }}
                 >
                   <SelectOption
                     value="linear"
-                    primaryText={t`Linear (antialiased rendering, good for most games)`}
+                    label={t`Linear (antialiased rendering, good for most games)`}
                   />
                   <SelectOption
                     value="nearest"
-                    primaryText={t`Nearest (no antialiasing, good for pixel perfect games)`}
+                    label={t`Nearest (no antialiasing, good for pixel perfect games)`}
                   />
                 </SelectField>
                 <Checkbox
@@ -519,7 +656,10 @@ function ProjectPropertiesDialog(props: Props) {
                     </Trans>
                   }
                   checked={pixelsRounding}
-                  onCheck={(e, checked) => setPixelsRounding(checked)}
+                  onCheck={(e, checked) => {
+                    setPixelsRounding(checked);
+                    notifyOfChange();
+                  }}
                 />
                 {scaleMode === 'nearest' && (
                   <DismissableAlertMessage
@@ -534,38 +674,69 @@ function ProjectPropertiesDialog(props: Props) {
                     </Trans>
                   </DismissableAlertMessage>
                 )}
-                <Text size="title">
-                  <Trans>Publishing</Trans>
-                </Text>
-                <SemiControlledTextField
-                  floatingLabelText={<Trans>Publisher name</Trans>}
+                {pixelsRounding && (
+                  <DismissableAlertMessage
+                    identifier="use-pixel-rounding"
+                    kind="info"
+                  >
+                    <Trans>
+                      To avoid flickering on objects followed by the camera, use
+                      sprites with even dimensions.
+                    </Trans>
+                  </DismissableAlertMessage>
+                )}
+                <SelectField
                   fullWidth
-                  hintText={t`Your name`}
-                  helperMarkdownText={i18n._(
-                    t`This will be used when packaging and submitting your application to the stores.`
-                  )}
-                  type="text"
-                  value={author}
-                  onChange={setAuthor}
-                />
-                <Text size="title">
+                  floatingLabelText={<Trans>Antialising for 3D</Trans>}
+                  value={
+                    antialiasingMode === 'none'
+                      ? 'never'
+                      : isAntialisingEnabledOnMobile
+                      ? 'always'
+                      : 'notOnMobile'
+                  }
+                  onChange={(e, i, newScaleMode: string) => {
+                    if (newScaleMode === scaleMode) {
+                      return;
+                    }
+                    setAntialiasingMode(
+                      newScaleMode === 'never' ? 'none' : 'MSAA'
+                    );
+                    setAntialisingEnabledOnMobile(newScaleMode === 'always');
+                    notifyOfChange();
+                  }}
+                >
+                  <SelectOption value="notOnMobile" label={t`Not on mobile`} />
+                  <SelectOption value="always" label={t`Always`} />
+                  <SelectOption value="never" label={t`Never`} />
+                </SelectField>
+
+                <Text size="block-title">
                   <Trans>Project files</Trans>
                 </Text>
                 <SelectField
                   fullWidth
                   floatingLabelText={<Trans>Project file type</Trans>}
                   value={isFolderProject ? 'folder-project' : 'single-file'}
-                  onChange={(e, i, value: string) =>
-                    setIsFolderProject(value === 'folder-project')
-                  }
+                  onChange={(e, i, value: string) => {
+                    const newIsFolderProject = value === 'folder-project';
+                    if (newIsFolderProject === isFolderProject) {
+                      return;
+                    }
+                    setIsFolderProject(newIsFolderProject);
+                    notifyOfChange();
+                  }}
+                  helperMarkdownText={i18n._(
+                    t`Note that this option will only have an effect when saving your project on your computer's filesystem from the desktop app. Read about [using Git or GitHub with projects in multiple files](https://wiki.gdevelop.io/gdevelop5/tutorials/using-github-desktop/).`
+                  )}
                 >
                   <SelectOption
                     value={'single-file'}
-                    primaryText={t`Single file (default)`}
+                    label={t`Single file (default)`}
                   />
                   <SelectOption
                     value={'folder-project'}
-                    primaryText={t`Multiple files, saved in folder next to the main file`}
+                    label={t`Multiple files, saved in folder next to the main file`}
                   />
                 </SelectField>
                 <ExtensionsProperties project={project} />
@@ -574,14 +745,11 @@ function ProjectPropertiesDialog(props: Props) {
             {currentTab === 'loading-screen' && (
               <LoadingScreenEditor
                 loadingScreen={project.getLoadingScreen()}
-                onChangeSubscription={() => {
-                  onCancelChanges();
-                  props.onChangeSubscription();
-                }}
+                watermark={project.getWatermark()}
+                onLoadingScreenUpdated={notifyOfLoadingScreenChange}
+                onChangeSubscription={onCancelChanges}
                 project={project}
-                resourceSources={props.resourceSources}
-                onChooseResource={props.onChooseResource}
-                resourceExternalEditors={props.resourceExternalEditors}
+                resourceManagementProps={props.resourceManagementProps}
               />
             )}
           </Dialog>
@@ -589,6 +757,17 @@ function ProjectPropertiesDialog(props: Props) {
       )}
     </I18n>
   );
-}
+};
 
-export default ProjectPropertiesDialog;
+const ProjectPropertiesDialogWithErrorBoundary = (props: Props) => (
+  <ErrorBoundary
+    componentTitle={<Trans>Project properties</Trans>}
+    scope="project-properties"
+    onClose={props.onClose}
+    showOnTop
+  >
+    <ProjectPropertiesDialog {...props} />
+  </ErrorBoundary>
+);
+
+export default ProjectPropertiesDialogWithErrorBoundary;

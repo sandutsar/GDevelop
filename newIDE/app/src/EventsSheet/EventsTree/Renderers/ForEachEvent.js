@@ -1,6 +1,6 @@
 // @flow
 import * as React from 'react';
-import InstructionsList from '../InstructionsList.js';
+import InstructionsList from '../InstructionsList';
 import classNames from 'classnames';
 import {
   largeSelectedArea,
@@ -13,7 +13,8 @@ import InlinePopover from '../../InlinePopover';
 import ObjectField from '../../ParameterFields/ObjectField';
 import { type EventRendererProps } from './EventRenderer';
 import ConditionsActionsColumns from '../ConditionsActionsColumns';
-import { shouldActivate } from '../../../UI/KeyboardShortcuts/InteractionKeys.js';
+import { shouldActivate } from '../../../UI/KeyboardShortcuts/InteractionKeys';
+import { type ParameterFieldInterface } from '../../ParameterFields/ParameterFieldCommons';
 import { Trans } from '@lingui/macro';
 const gd: libGDevelop = global.gd;
 
@@ -34,7 +35,7 @@ export default class ForEachEvent extends React.Component<
   EventRendererProps,
   *
 > {
-  _objectField: ?ObjectField = null;
+  _objectField: ?ParameterFieldInterface = null;
   state = {
     editing: false,
     editingPreviousValue: null,
@@ -133,9 +134,10 @@ export default class ForEachEvent extends React.Component<
         </div>
         <ConditionsActionsColumns
           leftIndentWidth={this.props.leftIndentWidth}
-          windowWidth={this.props.windowWidth}
+          windowSize={this.props.windowSize}
           renderConditionsList={({ style, className }) => (
             <InstructionsList
+              platform={this.props.project.getCurrentPlatform()}
               instrsList={forEachEvent.getConditions()}
               style={style}
               className={className}
@@ -155,11 +157,17 @@ export default class ForEachEvent extends React.Component<
               disabled={this.props.disabled}
               renderObjectThumbnail={this.props.renderObjectThumbnail}
               screenType={this.props.screenType}
-              windowWidth={this.props.windowWidth}
+              windowSize={this.props.windowSize}
+              scope={this.props.scope}
+              resourcesManager={this.props.project.getResourcesManager()}
+              globalObjectsContainer={this.props.globalObjectsContainer}
+              objectsContainer={this.props.objectsContainer}
+              idPrefix={this.props.idPrefix}
             />
           )}
           renderActionsList={({ className }) => (
             <InstructionsList
+              platform={this.props.project.getCurrentPlatform()}
               instrsList={forEachEvent.getActions()}
               style={
                 {
@@ -183,7 +191,12 @@ export default class ForEachEvent extends React.Component<
               disabled={this.props.disabled}
               renderObjectThumbnail={this.props.renderObjectThumbnail}
               screenType={this.props.screenType}
-              windowWidth={this.props.windowWidth}
+              windowSize={this.props.windowSize}
+              scope={this.props.scope}
+              resourcesManager={this.props.project.getResourcesManager()}
+              globalObjectsContainer={this.props.globalObjectsContainer}
+              objectsContainer={this.props.objectsContainer}
+              idPrefix={this.props.idPrefix}
             />
           )}
         />

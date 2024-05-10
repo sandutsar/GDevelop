@@ -13,13 +13,28 @@ const log = require('electron-log');
 const { uploadLocalFile } = require('./LocalFileUploader');
 const { serveFolder, stopServer } = require('./ServeFolder');
 const { startDebuggerServer, sendMessage } = require('./DebuggerServer');
-const { buildMainMenuFor, buildPlaceholderMainMenu } = require('./MainMenu');
-const { loadModalWindow } = require('./ModalWindow');
+const {
+  buildElectronMenuFromDeclarativeTemplate,
+  buildPlaceholderMainMenu,
+} = require('./MainMenu');
+const { loadExternalEditorWindow } = require('./LocalExternalEditorWindow');
 const { load, registerGdideProtocol } = require('./Utils/UrlLoader');
 const throttle = require('lodash.throttle');
 const { findLocalIp } = require('./Utils/LocalNetworkIpFinder');
 const setUpDiscordRichPresence = require('./DiscordRichPresence');
-const { downloadLocalFile } = require('./LocalFileDownloader');
+const {
+  downloadLocalFile,
+  saveLocalFileFromArrayBuffer,
+} = require('./LocalFileDownloader');
+const { openPreviewWindow, closePreviewWindow } = require('./PreviewWindow');
+const {
+  setupLocalGDJSDevelopmentWatcher,
+  closeLocalGDJSDevelopmentWatcher,
+} = require('./LocalGDJSDevelopmentWatcher');
+const { setupWatcher, disableWatcher } = require('./LocalFilesystemWatcher');
+
+// Initialize `@electron/remote` module
+require('@electron/remote/main').initialize();
 
 log.info('GDevelop Electron app starting...');
 
@@ -46,17 +61,10 @@ const args = parseArgs(process.argv.slice(isDev ? 2 : 1), {
 // See registerGdideProtocol (used for HTML modules support)
 protocol.registerSchemesAsPrivileged([{ scheme: 'gdide' }]);
 
-// Should be set to true, which will be the default value in future Electron
-// versions, but then causes an issue on Windows where the `fs` module stops
-// working in the renderer process.
-// See https://github.com/electron/electron/issues/22119
-// For now, disable this as we rely heavily on `fs` in the renderer process.
-app.allowRendererProcessReuse = false;
-
 // Notifications on Microsoft Windows platforms show the app user model id.
 // If not set, defaults to `electron.app.{app.name}`.
 if (process.platform === 'win32') {
-    app.setAppUserModelId('gdevelop.ide');
+  app.setAppUserModelId('gdevelop.ide');
 }
 
 // Quit when all windows are closed.
@@ -82,12 +90,21 @@ app.on('ready', function() {
     height: args.height || 600,
     x: args.x,
     y: args.y,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#000000',
+      symbolColor: '#ffffff',
+    },
+    trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
       webSecurity: false, // Allow to access to local files,
+      // Allow Node.js API access in renderer process, as long
+      // as we've not removed dependency on it and on "@electron/remote".
       nodeIntegration: true,
+      contextIsolation: false,
     },
     enableLargerThanScreen: true,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#000',
   };
 
   if (isIntegrated) {
@@ -102,13 +119,16 @@ app.on('ready', function() {
     options.show = false;
   }
 
-  if (isDev)
-    BrowserWindow.addDevToolsExtension(
-      path.join(__dirname, 'extensions/ReactDeveloperTools/4.2.1_0/')
-    );
-
   mainWindow = new BrowserWindow(options);
   if (!isIntegrated) mainWindow.maximize();
+
+  // Enable `@electron/remote` module for renderer process
+  require('@electron/remote/main').enable(mainWindow.webContents);
+
+  if (isDev)
+    mainWindow.webContents.session.loadExtension(
+      path.join(__dirname, 'extensions/ReactDeveloperTools/4.24.3_0/')
+    );
 
   // Expose program arguments (to be accessed by mainWindow)
   global['args'] = args;
@@ -132,7 +152,9 @@ app.on('ready', function() {
   });
 
   ipcMain.on('set-main-menu', (event, mainMenuTemplate) => {
-    Menu.setApplicationMenu(buildMainMenuFor(mainWindow, mainMenuTemplate));
+    Menu.setApplicationMenu(
+      buildElectronMenuFromDeclarativeTemplate(mainWindow, mainMenuTemplate)
+    );
   });
 
   //Prevent any navigation inside the main window.
@@ -144,86 +166,54 @@ app.on('ready', function() {
     }
   });
 
-  //Prevent opening any website or url inside Electron.
-  mainWindow.webContents.on('new-window', (e, url) => {
-    console.info('Opening in browser (because of new-window): ', url);
-    e.preventDefault();
-    electron.shell.openExternal(url);
+  // Prevent opening any website or url inside Electron
+  mainWindow.webContents.setWindowOpenHandler(details => {
+    console.info('Opening in browser (because of new window): ', details.url);
+    electron.shell.openExternal(details.url);
+    return { action: 'deny' };
   });
 
-  ipcMain.on('piskel-open-then-load-animation', (event, externalEditorData) => {
-    loadModalWindow({
+  ipcMain.handle('preview-open', async (event, options) => {
+    return openPreviewWindow({
       parentWindow: mainWindow,
-      devTools,
-      readyChannelName: 'piskel-ready',
-      indexSubPath: 'piskel/piskel-index.html',
-      backgroundColor: '#000000',
-      onReady: piskelWindow => {
-        piskelWindow.webContents.send(
-          'piskel-load-animation',
-          externalEditorData
-        ),
-          piskelWindow.show();
-      },
+      previewBrowserWindowOptions: options.previewBrowserWindowOptions,
+      previewGameIndexHtmlPath: options.previewGameIndexHtmlPath,
+      alwaysOnTop: options.alwaysOnTop,
+      hideMenuBar: options.hideMenuBar,
     });
   });
+  ipcMain.handle('preview-close', async (event, options) => {
+    return closePreviewWindow(options.windowId);
+  });
 
-  ipcMain.on(
-    'piskel-changes-saved',
-    (event, imageResources, newAnimationName, externalEditorData) => {
-      mainWindow.webContents.send(
-        'piskel-changes-saved',
-        imageResources,
-        newAnimationName,
-        externalEditorData
-      );
-    }
-  );
+  // Piskel image editor
+  ipcMain.handle('piskel-load', (event, externalEditorInput) => {
+    return loadExternalEditorWindow({
+      parentWindow: mainWindow,
+      devTools,
+      indexSubPath: 'piskel/piskel-electron-index.html',
+      externalEditorInput,
+    });
+  });
 
   // JFXR sound effect generator
-  ipcMain.on('jfxr-create-wav', (event, externalEditorData) => {
-    loadModalWindow({
+  ipcMain.handle('jfxr-load', (event, externalEditorInput) => {
+    return loadExternalEditorWindow({
       parentWindow: mainWindow,
       devTools,
-      readyChannelName: 'jfxr-ready',
-      indexSubPath: 'jfxr/jfxr-index.html',
-      relativeWidth: 0.55,
-      relativeHeight: 0.8,
-      backgroundColor: '#000000',
-      onReady: jfxrWindow => {
-        jfxrWindow.webContents.send('jfxr-open', externalEditorData);
-        jfxrWindow.show();
-      },
+      indexSubPath: 'jfxr/jfxr-electron-index.html',
+      externalEditorInput,
     });
-  });
-
-  ipcMain.on('jfxr-changes-saved', (event, newFilePath, externalEditorData) => {
-    mainWindow.webContents.send(
-      'jfxr-changes-saved',
-      newFilePath,
-      externalEditorData
-    );
   });
 
   // Yarn Dialogue Tree Editor
-  ipcMain.on('yarn-create-json', (event, externalEditorData) => {
-    loadModalWindow({
+  ipcMain.handle('yarn-load', (event, externalEditorInput) => {
+    return loadExternalEditorWindow({
       parentWindow: mainWindow,
       devTools,
-      readyChannelName: 'yarn-ready',
-      indexSubPath: 'yarn/yarn-index.html',
-      relativeWidth: 0.8,
-      relativeHeight: 0.9,
-      backgroundColor: '#000000',
-      onReady: yarnWindow => {
-        yarnWindow.webContents.send('yarn-open', externalEditorData);
-        yarnWindow.show();
-      },
+      indexSubPath: 'yarn/yarn-electron-index.html',
+      externalEditorInput,
     });
-  });
-
-  ipcMain.on('yarn-changes-saved', (event, newFilePath) => {
-    mainWindow.webContents.send('yarn-changes-saved', newFilePath);
   });
 
   // LocalFileUploader events:
@@ -241,7 +231,7 @@ app.on('ready', function() {
       }, 300)
     ).then(
       () => {
-        log.info('Local file upload succesfully done');
+        log.info('Local file upload successfully done');
         event.sender.send('local-file-upload-done', null);
       },
       uploadError => {
@@ -251,18 +241,64 @@ app.on('ready', function() {
     );
   });
 
+  // Titlebar handling:
+  ipcMain.handle(
+    'titlebar-set-overlay-options',
+    async (event, overlayOptions) => {
+      if (!mainWindow) return;
+
+      // setTitleBarOverlay seems not defined on macOS.
+      if (mainWindow.setTitleBarOverlay)
+        mainWindow.setTitleBarOverlay(overlayOptions);
+    }
+  );
+
   // LocalFileDownloader events:
   ipcMain.handle('local-file-download', async (event, url, outputPath) => {
     const result = await downloadLocalFile(url, outputPath);
     return result;
-  })
+  });
+  ipcMain.handle(
+    'local-file-save-from-arraybuffer',
+    async (event, arrayBuffer, outputPath) => {
+      const result = await saveLocalFileFromArrayBuffer(
+        arrayBuffer,
+        outputPath
+      );
+      return result;
+    }
+  );
+
+  // LocalFilesystemWatcher events:
+  ipcMain.handle(
+    'local-filesystem-watcher-setup',
+    (event, folderPath, options) => {
+      const subscriptionId = setupWatcher(
+        folderPath,
+        changedFilePath => {
+          event.sender.send('project-file-changed', changedFilePath);
+        },
+        options
+      );
+      return subscriptionId;
+    }
+  );
+  ipcMain.handle(
+    'local-filesystem-watcher-disable',
+    (event, subscriptionId) => {
+      disableWatcher(subscriptionId);
+    }
+  );
 
   // ServeFolder events:
   ipcMain.on('serve-folder', (event, options) => {
     log.info('Received event to server folder with options=', options);
 
     serveFolder(options, (err, serverParams) => {
-      event.sender.send('serve-folder-done', err, serverParams);
+      // Using JSON to copy the config strips unserializable properties
+      // (like middleware functions) automatically.
+      const configCopy = JSON.parse(JSON.stringify(serverParams));
+      event.sender.send('serve-folder-done', err, configCopy);
     });
   });
 
@@ -278,6 +314,15 @@ app.on('ready', function() {
     event.sender.send('local-network-ip', findLocalIp());
   });
 
+  // LocalGDJSDevelopmentWatcher events:
+  ipcMain.on('setup-local-gdjs-development-watcher', event => {
+    setupLocalGDJSDevelopmentWatcher();
+  });
+
+  ipcMain.on('close-local-gdjs-development-watcher', event => {
+    closeLocalGDJSDevelopmentWatcher();
+  });
+
   // DebuggerServer events:
   ipcMain.on('debugger-start-server', (event, options) => {
     log.info('Received event to start debugger server with options=', options);
@@ -290,6 +335,8 @@ app.on('ready', function() {
         event.sender.send('debugger-connection-closed', { id }),
       onConnectionOpen: ({ id }) =>
         event.sender.send('debugger-connection-opened', { id }),
+      onConnectionError: ({ id, errorMessage }) =>
+        event.sender.send('debugger-connection-errored', { id, errorMessage }),
       onListening: ({ address }) =>
         event.sender.send('debugger-start-server-done', { address }),
     });

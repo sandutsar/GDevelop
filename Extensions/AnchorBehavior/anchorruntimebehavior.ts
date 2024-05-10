@@ -15,14 +15,23 @@ namespace gdjs {
     _rightEdgeDistance: number = 0;
     _topEdgeDistance: number = 0;
     _bottomEdgeDistance: number = 0;
+    _useLegacyBottomAndRightAnchors: boolean = false;
 
-    constructor(runtimeScene, behaviorData, owner) {
-      super(runtimeScene, behaviorData, owner);
+    constructor(
+      instanceContainer: gdjs.RuntimeInstanceContainer,
+      behaviorData,
+      owner: gdjs.RuntimeObject
+    ) {
+      super(instanceContainer, behaviorData, owner);
       this._relativeToOriginalWindowSize = !!behaviorData.relativeToOriginalWindowSize;
       this._leftEdgeAnchor = behaviorData.leftEdgeAnchor;
       this._rightEdgeAnchor = behaviorData.rightEdgeAnchor;
       this._topEdgeAnchor = behaviorData.topEdgeAnchor;
       this._bottomEdgeAnchor = behaviorData.bottomEdgeAnchor;
+      this._useLegacyBottomAndRightAnchors =
+        behaviorData.useLegacyBottomAndRightAnchors === undefined
+          ? true
+          : behaviorData.useLegacyBottomAndRightAnchors;
     }
 
     updateFromBehaviorData(oldBehaviorData, newBehaviorData): boolean {
@@ -41,6 +50,13 @@ namespace gdjs {
         this._bottomEdgeAnchor = newBehaviorData.bottomEdgeAnchor;
       }
       if (
+        oldBehaviorData.useLegacyTrajectory !==
+        newBehaviorData.useLegacyTrajectory
+      ) {
+        this._useLegacyBottomAndRightAnchors =
+          newBehaviorData.useLegacyBottomAndRightAnchors;
+      }
+      if (
         oldBehaviorData.relativeToOriginalWindowSize !==
         newBehaviorData.relativeToOriginalWindowSize
       ) {
@@ -53,11 +69,15 @@ namespace gdjs {
       this._invalidDistances = true;
     }
 
-    doStepPreEvents(runtimeScene) {
-      const game = runtimeScene.getGame();
+    doStepPreEvents(instanceContainer: gdjs.RuntimeInstanceContainer) {
+      const workingPoint: FloatPoint = gdjs.staticArray(
+        gdjs.AnchorRuntimeBehavior.prototype.doStepPreEvents
+      ) as FloatPoint;
+      // TODO EBO Make it work with event based objects or hide this behavior for them.
+      const game = instanceContainer.getGame();
       let rendererWidth = game.getGameResolutionWidth();
       let rendererHeight = game.getGameResolutionHeight();
-      const layer = runtimeScene.getLayer(this.owner.getLayer());
+      const layer = instanceContainer.getLayer(this.owner.getLayer());
       if (this._invalidDistances) {
         if (this._relativeToOriginalWindowSize) {
           rendererWidth = game.getOriginalWidth();
@@ -67,7 +87,9 @@ namespace gdjs {
         //Calculate the distances from the window's bounds.
         const topLeftPixel = layer.convertCoords(
           this.owner.getDrawableX(),
-          this.owner.getDrawableY()
+          this.owner.getDrawableY(),
+          0,
+          workingPoint
         );
 
         //Left edge
@@ -113,9 +135,12 @@ namespace gdjs {
             }
           }
         }
+        // It's fine to reuse workingPoint as topLeftPixel is no longer used.
         const bottomRightPixel = layer.convertCoords(
           this.owner.getDrawableX() + this.owner.getWidth(),
-          this.owner.getDrawableY() + this.owner.getHeight()
+          this.owner.getDrawableY() + this.owner.getHeight(),
+          0,
+          workingPoint
         );
 
         //Right edge
@@ -256,39 +281,118 @@ namespace gdjs {
             }
           }
         }
-        const topLeftCoord = layer.convertInverseCoords(leftPixel, topPixel);
+        // It's fine to reuse workingPoint as topLeftPixel is no longer used.
+        const topLeftCoord = layer.convertInverseCoords(
+          leftPixel,
+          topPixel,
+          0,
+          workingPoint
+        );
+        const left = topLeftCoord[0];
+        const top = topLeftCoord[1];
+
         const bottomRightCoord = layer.convertInverseCoords(
           rightPixel,
-          bottomPixel
+          bottomPixel,
+          0,
+          workingPoint
         );
+        const right = bottomRightCoord[0];
+        const bottom = bottomRightCoord[1];
 
-        //Move and resize the object according to the anchors
-        if (
-          this._rightEdgeAnchor !== AnchorRuntimeBehavior.HorizontalAnchor.NONE
-        ) {
-          this.owner.setWidth(bottomRightCoord[0] - topLeftCoord[0]);
+        // Compatibility with GD <= 5.0.133
+        if (this._useLegacyBottomAndRightAnchors) {
+          //Move and resize the object according to the anchors
+          if (
+            this._rightEdgeAnchor !==
+            AnchorRuntimeBehavior.HorizontalAnchor.NONE
+          ) {
+            this.owner.setWidth(right - left);
+          }
+          if (
+            this._bottomEdgeAnchor !== AnchorRuntimeBehavior.VerticalAnchor.NONE
+          ) {
+            this.owner.setHeight(bottom - top);
+          }
+          if (
+            this._leftEdgeAnchor !== AnchorRuntimeBehavior.HorizontalAnchor.NONE
+          ) {
+            this.owner.setX(
+              left + this.owner.getX() - this.owner.getDrawableX()
+            );
+          }
+          if (
+            this._topEdgeAnchor !== AnchorRuntimeBehavior.VerticalAnchor.NONE
+          ) {
+            this.owner.setY(
+              top + this.owner.getY() - this.owner.getDrawableY()
+            );
+          }
         }
-        if (
-          this._bottomEdgeAnchor !== AnchorRuntimeBehavior.VerticalAnchor.NONE
-        ) {
-          this.owner.setHeight(bottomRightCoord[1] - topLeftCoord[1]);
-        }
-        if (
-          this._leftEdgeAnchor !== AnchorRuntimeBehavior.HorizontalAnchor.NONE
-        ) {
-          this.owner.setX(
-            topLeftCoord[0] + this.owner.getX() - this.owner.getDrawableX()
-          );
-        }
-        if (this._topEdgeAnchor !== AnchorRuntimeBehavior.VerticalAnchor.NONE) {
-          this.owner.setY(
-            topLeftCoord[1] + this.owner.getY() - this.owner.getDrawableY()
-          );
+        // End of compatibility code
+        else {
+          // Resize if right and left anchors are set
+          if (
+            this._rightEdgeAnchor !==
+              AnchorRuntimeBehavior.HorizontalAnchor.NONE &&
+            this._leftEdgeAnchor !== AnchorRuntimeBehavior.HorizontalAnchor.NONE
+          ) {
+            this.owner.setWidth(right - left);
+            this.owner.setX(left);
+          } else {
+            if (
+              this._leftEdgeAnchor !==
+              AnchorRuntimeBehavior.HorizontalAnchor.NONE
+            ) {
+              this.owner.setX(
+                left + this.owner.getX() - this.owner.getDrawableX()
+              );
+            }
+            if (
+              this._rightEdgeAnchor !==
+              AnchorRuntimeBehavior.HorizontalAnchor.NONE
+            ) {
+              this.owner.setX(
+                right +
+                  this.owner.getX() -
+                  this.owner.getDrawableX() -
+                  this.owner.getWidth()
+              );
+            }
+          }
+          // Resize if top and bottom anchors are set
+          if (
+            this._bottomEdgeAnchor !==
+              AnchorRuntimeBehavior.VerticalAnchor.NONE &&
+            this._topEdgeAnchor !== AnchorRuntimeBehavior.VerticalAnchor.NONE
+          ) {
+            this.owner.setHeight(bottom - top);
+            this.owner.setY(top);
+          } else {
+            if (
+              this._topEdgeAnchor !== AnchorRuntimeBehavior.VerticalAnchor.NONE
+            ) {
+              this.owner.setY(
+                top + this.owner.getY() - this.owner.getDrawableY()
+              );
+            }
+            if (
+              this._bottomEdgeAnchor !==
+              AnchorRuntimeBehavior.VerticalAnchor.NONE
+            ) {
+              this.owner.setY(
+                bottom +
+                  this.owner.getY() -
+                  this.owner.getDrawableY() -
+                  this.owner.getHeight()
+              );
+            }
+          }
         }
       }
     }
 
-    doStepPostEvents(runtimeScene) {}
+    doStepPostEvents(instanceContainer: gdjs.RuntimeInstanceContainer) {}
 
     static HorizontalAnchor = {
       NONE: 0,

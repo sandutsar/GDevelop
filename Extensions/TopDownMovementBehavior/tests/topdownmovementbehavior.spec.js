@@ -4,12 +4,7 @@ describe('gdjs.TopDownMovementRuntimeBehavior', function () {
   const topDownName = 'auto1';
 
   const createScene = (timeDelta = 1000 / 60) => {
-    const runtimeGame = new gdjs.RuntimeGame({
-      variables: [],
-      // @ts-ignore - missing properties.
-      properties: { windowWidth: 800, windowHeight: 600 },
-      resources: { resources: [] },
-    });
+    const runtimeGame = gdjs.getPixiRuntimeGame();
     const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
     runtimeScene.loadFromScene({
       layers: [
@@ -37,6 +32,7 @@ describe('gdjs.TopDownMovementRuntimeBehavior', function () {
       behaviorsSharedData: [],
       objects: [],
       instances: [],
+      usedResources: [],
     });
     runtimeScene._timeManager.getElapsedTime = function () {
       return timeDelta;
@@ -99,6 +95,10 @@ describe('gdjs.TopDownMovementRuntimeBehavior', function () {
                 player.getBehavior(topDownName).simulateDownKey();
               }
               runtimeScene.renderAndStep(1000 / 60);
+              expect(
+                player.getBehavior(topDownName).getXVelocity()
+              ).to.be.above(0);
+              expect(player.getBehavior(topDownName).getYVelocity()).to.be(0);
             }
 
             expect(player.getX()).to.be.above(200 + 20);
@@ -120,6 +120,10 @@ describe('gdjs.TopDownMovementRuntimeBehavior', function () {
                 player.getBehavior(topDownName).simulateUpKey();
               }
               runtimeScene.renderAndStep(1000 / 60);
+              expect(
+                player.getBehavior(topDownName).getXVelocity()
+              ).to.be.below(0);
+              expect(player.getBehavior(topDownName).getYVelocity()).to.be(0);
             }
 
             expect(player.getX()).to.be.below(200 - 20);
@@ -141,6 +145,10 @@ describe('gdjs.TopDownMovementRuntimeBehavior', function () {
                 player.getBehavior(topDownName).simulateLeftKey();
               }
               runtimeScene.renderAndStep(1000 / 60);
+              expect(player.getBehavior(topDownName).getXVelocity()).to.be(0);
+              expect(
+                player.getBehavior(topDownName).getYVelocity()
+              ).to.be.above(0);
             }
 
             expect(player.getX()).to.be(200);
@@ -162,6 +170,10 @@ describe('gdjs.TopDownMovementRuntimeBehavior', function () {
                 player.getBehavior(topDownName).simulateLeftKey();
               }
               runtimeScene.renderAndStep(1000 / 60);
+              expect(player.getBehavior(topDownName).getXVelocity()).to.be(0);
+              expect(
+                player.getBehavior(topDownName).getYVelocity()
+              ).to.be.below(0);
             }
 
             expect(player.getX()).to.be(200);

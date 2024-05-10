@@ -4,12 +4,15 @@
  * reserved. This project is released under the MIT License.
  */
 #include "GDCore/Project/VariablesContainer.h"
+
 #include <algorithm>
 #include <iostream>
+
 #include "GDCore/Project/Variable.h"
 #include "GDCore/Serialization/SerializerElement.h"
 #include "GDCore/String.h"
 #include "GDCore/TinyXml/tinyxml.h"
+#include "GDCore/Tools/UUID/UUID.h"
 
 namespace gd {
 
@@ -88,7 +91,6 @@ Variable& VariablesContainer::Insert(const gd::String& name,
   }
 }
 
-#if defined(GD_IDE_ONLY)
 void VariablesContainer::Remove(const gd::String& varName) {
   variables.erase(
       std::remove_if(
@@ -151,15 +153,29 @@ void VariablesContainer::Swap(std::size_t firstVariableIndex,
 }
 
 void VariablesContainer::Move(std::size_t oldIndex, std::size_t newIndex) {
-  if (oldIndex >= variables.size() || newIndex >= variables.size()) return;
+  if (oldIndex >= variables.size() || newIndex >= variables.size() ||
+      oldIndex == newIndex)
+    return;
 
   auto nameAndVariable = variables[oldIndex];
   variables.erase(variables.begin() + oldIndex);
   variables.insert(variables.begin() + newIndex, nameAndVariable);
 }
-#endif
+
+void VariablesContainer::ForEachVariableMatchingSearch(
+    const gd::String& search,
+    std::function<void(const gd::String& name, const gd::Variable& variable)>
+        fn) const {
+  for (const auto& nameAndVariable : variables) {
+    if (nameAndVariable.first.FindCaseInsensitive(search) != gd::String::npos)
+      fn(nameAndVariable.first, *nameAndVariable.second);
+  }
+}
 
 void VariablesContainer::SerializeTo(SerializerElement& element) const {
+  if (!persistentUuid.empty())
+    element.SetStringAttribute("persistentUuid", persistentUuid);
+
   element.ConsiderAsArrayOf("variable");
   for (std::size_t j = 0; j < variables.size(); j++) {
     SerializerElement& variableElement = element.AddChild("variable");
@@ -169,6 +185,8 @@ void VariablesContainer::SerializeTo(SerializerElement& element) const {
 }
 
 void VariablesContainer::UnserializeFrom(const SerializerElement& element) {
+  persistentUuid = element.GetStringAttribute("persistentUuid");
+
   Clear();
   element.ConsiderAsArrayOf("variable", "Variable");
   for (std::size_t j = 0; j < element.GetChildrenCount(); j++) {
@@ -179,6 +197,24 @@ void VariablesContainer::UnserializeFrom(const SerializerElement& element) {
     Insert(
         variableElement.GetStringAttribute("name", "", "Name"), variable, -1);
   }
+}
+
+VariablesContainer& VariablesContainer::ResetPersistentUuid() {
+  persistentUuid = UUID::MakeUuid4();
+  for (auto& variable : variables) {
+    variable.second->ResetPersistentUuid();
+  }
+
+  return *this;
+}
+
+VariablesContainer& VariablesContainer::ClearPersistentUuid() {
+  persistentUuid = "";
+  for (auto& variable : variables) {
+    variable.second->ClearPersistentUuid();
+  }
+
+  return *this;
 }
 
 VariablesContainer::VariablesContainer(const VariablesContainer& other) {
@@ -193,6 +229,7 @@ VariablesContainer& VariablesContainer::operator=(
 }
 
 void VariablesContainer::Init(const gd::VariablesContainer& other) {
+  persistentUuid = other.persistentUuid;
   variables.clear();
   for (auto& it : other.variables) {
     variables.push_back(

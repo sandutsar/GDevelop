@@ -12,6 +12,10 @@ namespace gdjs {
     max: FloatPoint;
   };
 
+  export type RendererObjectInterface = {
+    visible: boolean;
+  };
+
   /**
    * Return the squared bounding radius of an object given its width/height and its center of rotation
    * (relative to the top-left of the object). The radius is relative to the center of rotation.
@@ -37,6 +41,16 @@ namespace gdjs {
   } = {
     moveXArray: [],
     moveYArray: [],
+  };
+
+  /**
+   * Data structure that are (re)used by
+   * {@link RuntimeObject.raycastTest} to avoid any allocation.
+   */
+  const raycastTestStatics: {
+    result: RaycastTestResult;
+  } = {
+    result: gdjs.Polygon.makeNewRaycastTestResult(),
   };
 
   /**
@@ -139,7 +153,7 @@ namespace gdjs {
    * A `gdjs.RuntimeObject` should not be instantiated directly, always a child class
    * (because gdjs.RuntimeObject don't call onCreated at the end of its constructor).
    */
-  export class RuntimeObject implements EffectsTarget {
+  export class RuntimeObject implements EffectsTarget, gdjs.EffectHandler {
     name: string;
     type: string;
     x: float = 0;
@@ -152,7 +166,8 @@ namespace gdjs {
     protected _livingOnScene: boolean = true;
 
     readonly id: integer;
-    _runtimeScene: gdjs.RuntimeScene;
+    private destroyCallbacks = new Set<() => void>();
+    _runtimeScene: gdjs.RuntimeInstanceContainer;
 
     /**
      * An optional UUID associated to the object to be used
@@ -172,21 +187,37 @@ namespace gdjs {
     protected hitBoxes: gdjs.Polygon[];
     protected hitBoxesDirty: boolean = true;
     protected aabb: AABB = { min: [0, 0], max: [0, 0] };
+    protected _isIncludedInParentCollisionMask = true;
 
     //Variables:
     protected _variables: gdjs.VariablesContainer;
 
     //Effects:
-    protected _rendererEffects: Record<string, PixiFiltersTools.Filter> = {};
+    protected _rendererEffects: Record<
+      string,
+      gdjs.PixiFiltersTools.Filter
+    > = {};
 
     //Forces:
-    protected _forces: gdjs.Force[] = [];
-    _averageForce: gdjs.Force;
+    protected _instantForces: gdjs.Force[] = [];
+    _permanentForceX: float = 0;
+    _permanentForceY: float = 0;
+    _totalForce: gdjs.Force;
 
     /**
-     * Contains the behaviors of the object.
+     * Contains the behaviors of the object, except those not having lifecycle functions.
+     *
+     * This means default, hidden, "capability" behaviors are not included in this array.
+     * This avoids wasting time iterating on them when we know their lifecycle functions
+     * are never used.
      */
     protected _behaviors: gdjs.RuntimeBehavior[] = [];
+    /**
+     * Contains the behaviors of the object by name.
+     *
+     * This includes the default, hidden, "capability" behaviors (those to handle opacity,
+     * effects, scale, size...).
+     */
     protected _behaviorsTable: Hashtable<gdjs.RuntimeBehavior>;
     protected _timers: Hashtable<gdjs.Timer>;
 
@@ -194,18 +225,21 @@ namespace gdjs {
      * @param runtimeScene The scene the object belongs to..
      * @param objectData The initial properties of the object.
      */
-    constructor(runtimeScene: gdjs.RuntimeScene, objectData: ObjectData) {
+    constructor(
+      instanceContainer: gdjs.RuntimeInstanceContainer,
+      objectData: ObjectData & any
+    ) {
       this.name = objectData.name || '';
       this.type = objectData.type || '';
       this._nameId = RuntimeObject.getNameIdentifier(this.name);
-      this.id = runtimeScene.createNewUniqueId();
-      this._runtimeScene = runtimeScene;
+      this.id = instanceContainer.getScene().createNewUniqueId();
+      this._runtimeScene = instanceContainer;
       this._defaultHitBoxes.push(gdjs.Polygon.createRectangle(0, 0));
       this.hitBoxes = this._defaultHitBoxes;
       this._variables = new gdjs.VariablesContainer(
         objectData ? objectData.variables : undefined
       );
-      this._averageForce = new gdjs.Force(0, 0, 0);
+      this._totalForce = new gdjs.Force(0, 0, 0);
       this._behaviorsTable = new Hashtable();
       for (let i = 0; i < objectData.effects.length; ++i) {
         this._runtimeScene
@@ -214,13 +248,15 @@ namespace gdjs {
           .initializeEffect(objectData.effects[i], this._rendererEffects, this);
         this.updateAllEffectParameters(objectData.effects[i]);
       }
-
       //Also contains the behaviors: Used when a behavior is accessed by its name ( see getBehavior ).
       for (let i = 0, len = objectData.behaviors.length; i < len; ++i) {
         const autoData = objectData.behaviors[i];
         const Ctor = gdjs.getBehaviorConstructor(autoData.type);
-        this._behaviors.push(new Ctor(runtimeScene, autoData, this));
-        this._behaviorsTable.put(autoData.name, this._behaviors[i]);
+        const behavior = new Ctor(instanceContainer, autoData, this);
+        if (behavior.usesLifecycleFunction()) {
+          this._behaviors.push(behavior);
+        }
+        this._behaviorsTable.put(autoData.name, behavior);
       }
       this._timers = new Hashtable();
     }
@@ -236,14 +272,11 @@ namespace gdjs {
      * (`RuntimeObject.prototype.onCreated.call(this);`).
      */
     onCreated(): void {
-      for (const effectName in this._rendererEffects) {
-        this._runtimeScene
-          .getGame()
-          .getEffectsManager()
-          .applyEffect(
-            this.getRendererObject(),
-            this._rendererEffects[effectName]
-          );
+      const rendererObject = this.getRendererObject();
+      if (rendererObject) {
+        for (const effectName in this._rendererEffects) {
+          this._rendererEffects[effectName].applyEffect(this);
+        }
       }
 
       for (let i = 0; i < this._behaviors.length; ++i) {
@@ -261,7 +294,7 @@ namespace gdjs {
      * To implement this in your object:
      * * Set `gdjs.YourRuntimeObject.supportsReinitialization = true;` to declare support for recycling.
      * * Implement `reinitialize`. It **must** call the `reinitialize` of `gdjs.RuntimeObject`, and call `this.onCreated();`
-     * at the end of `reinitizalize`.
+     * at the end of `reinitialize`.
      * * It must reset the object as if it was newly constructed (be careful about your renderers and any global state).
      * * The `_runtimeScene`, `_nameId`, `name` and `type` are guaranteed to stay the same and do not
      * need to be set again.
@@ -281,6 +314,8 @@ namespace gdjs {
       this.persistentUuid = null;
       this.pick = false;
       this.hitBoxesDirty = true;
+      this._defaultHitBoxes.length = 0;
+      this._defaultHitBoxes.push(gdjs.Polygon.createRectangle(0, 0));
       this.aabb.min[0] = 0;
       this.aabb.min[1] = 0;
       this.aabb.max[0] = 0;
@@ -290,19 +325,28 @@ namespace gdjs {
 
       // Reinitialize behaviors.
       this._behaviorsTable.clear();
-      let i = 0;
-      for (const len = objectData.behaviors.length; i < len; ++i) {
-        const behaviorData = objectData.behaviors[i];
+      const behaviorsDataCount = objectData.behaviors.length;
+      let behaviorsUsingLifecycleFunctionCount = 0;
+      for (
+        let behaviorDataIndex = 0;
+        behaviorDataIndex < behaviorsDataCount;
+        ++behaviorDataIndex
+      ) {
+        const behaviorData = objectData.behaviors[behaviorDataIndex];
         const Ctor = gdjs.getBehaviorConstructor(behaviorData.type);
-        if (i < this._behaviors.length) {
-          // TODO: Add support for behavior recycling with a `reinitialize` method.
-          this._behaviors[i] = new Ctor(runtimeScene, behaviorData, this);
-        } else {
-          this._behaviors.push(new Ctor(runtimeScene, behaviorData, this));
+        // TODO: Add support for behavior recycling with a `reinitialize` method.
+        const behavior = new Ctor(runtimeScene, behaviorData, this);
+        if (behavior.usesLifecycleFunction()) {
+          if (behaviorsUsingLifecycleFunctionCount < this._behaviors.length) {
+            this._behaviors[behaviorsUsingLifecycleFunctionCount] = behavior;
+          } else {
+            this._behaviors.push(behavior);
+          }
+          behaviorsUsingLifecycleFunctionCount++;
         }
-        this._behaviorsTable.put(behaviorData.name, this._behaviors[i]);
+        this._behaviorsTable.put(behaviorData.name, behavior);
       }
-      this._behaviors.length = i;
+      this._behaviors.length = behaviorsUsingLifecycleFunctionCount;
 
       // Reinitialize effects.
       for (let i = 0; i < objectData.effects.length; ++i) {
@@ -315,6 +359,10 @@ namespace gdjs {
 
       // Make sure to delete existing timers.
       this._timers.clear();
+
+      this.destroyCallbacks.clear();
+
+      this.invalidateHitboxes();
     }
 
     static supportsReinitialization = false;
@@ -325,9 +373,9 @@ namespace gdjs {
      *
      * Objects can have different elapsed time if they are on layers with different time scales.
      *
-     * @param runtimeScene The RuntimeScene the object belongs to (deprecated - can be omitted).
+     * @param instanceContainer The instance container the object belongs to (deprecated - can be omitted).
      */
-    getElapsedTime(runtimeScene?: gdjs.RuntimeScene): float {
+    getElapsedTime(instanceContainer?: gdjs.RuntimeInstanceContainer): float {
       const theLayer = this._runtimeScene.getLayer(this.layer);
       return theLayer.getElapsedTime();
     }
@@ -335,23 +383,36 @@ namespace gdjs {
     /**
      * The gdjs.RuntimeScene the object belongs to.
      */
-    getRuntimeScene(): RuntimeScene {
+    getParent(): gdjs.RuntimeInstanceContainer {
+      return this._runtimeScene;
+    }
+
+    /**
+     * The gdjs.RuntimeScene the object belongs to.
+     */
+    getRuntimeScene(): gdjs.RuntimeScene {
+      return this._runtimeScene.getScene();
+    }
+
+    /**
+     * The container the object belongs to.
+     */
+    getInstanceContainer(): gdjs.RuntimeInstanceContainer {
       return this._runtimeScene;
     }
 
     /**
      * Called once during the game loop, before events and rendering.
-     * @param runtimeScene The gdjs.RuntimeScene the object belongs to.
+     * @param instanceContainer The container the object belongs to.
      */
-    update(runtimeScene: gdjs.RuntimeScene): void {}
+    update(instanceContainer: gdjs.RuntimeInstanceContainer): void {}
 
     /**
      * Called once during the game loop, after events and before rendering.
-     * @param runtimeScene The gdjs.RuntimeScene the object belongs to.
+     * @param instanceContainer The container the object belongs to.
      */
-    updatePreRender(runtimeScene: gdjs.RuntimeScene): void {}
+    updatePreRender(instanceContainer: gdjs.RuntimeInstanceContainer): void {}
 
-    //Nothing to do.
     /**
      * Called when the object is created from an initial instance at the startup of the scene.<br>
      * Note that common properties (position, angle, z order...) have already been setup.
@@ -362,7 +423,6 @@ namespace gdjs {
       initialInstanceData: InstanceData
     ): void {}
 
-    //Nothing to do.
     /**
      * Called when the object must be updated using the specified objectData. This is the
      * case during hot-reload, and is only called if the object was modified.
@@ -383,13 +443,21 @@ namespace gdjs {
      * Remove an object from a scene.
      *
      * Do not change/redefine this method. Instead, redefine the onDestroyFromScene method.
-     * @param runtimeScene The RuntimeScene owning the object.
+     * @param instanceContainer The container owning the object.
      */
-    deleteFromScene(runtimeScene: gdjs.RuntimeScene): void {
+    deleteFromScene(instanceContainer: gdjs.RuntimeInstanceContainer): void {
       if (this._livingOnScene) {
-        runtimeScene.markObjectForDeletion(this);
+        instanceContainer.markObjectForDeletion(this);
         this._livingOnScene = false;
       }
+    }
+
+    registerDestroyCallback(callback: () => void) {
+      this.destroyCallbacks.add(callback);
+    }
+
+    unregisterDestroyCallback(callback: () => void) {
+      this.destroyCallbacks.delete(callback);
     }
 
     /**
@@ -397,28 +465,55 @@ namespace gdjs {
      * is being unloaded). If you redefine this function, **make sure to call the original method**
      * (`RuntimeObject.prototype.onDestroyFromScene.call(this, runtimeScene);`).
      *
-     * @param runtimeScene The scene owning the object.
+     * @param instanceContainer The container owning the object.
      */
-    onDestroyFromScene(runtimeScene: gdjs.RuntimeScene): void {
-      const theLayer = runtimeScene.getLayer(this.layer);
+    onDeletedFromScene(instanceContainer: gdjs.RuntimeInstanceContainer): void {
+      const theLayer = instanceContainer.getLayer(this.layer);
       const rendererObject = this.getRendererObject();
       if (rendererObject) {
         theLayer.getRenderer().removeRendererObject(rendererObject);
       }
+      const rendererObject3D = this.get3DRendererObject();
+      if (rendererObject3D) {
+        theLayer.getRenderer().remove3DRendererObject(rendererObject3D);
+      }
       for (let j = 0, lenj = this._behaviors.length; j < lenj; ++j) {
         this._behaviors[j].onDestroy();
       }
+      this.destroyCallbacks.forEach((c) => c());
       this.clearEffects();
     }
 
+    onDestroyed(): void {}
+
+    /**
+     * Called whenever the scene owning the object is paused.
+     * This should *not* impact objects, but some may need to inform their renderer.
+     *
+     * @param runtimeScene The scene owning the object.
+     */
+    onScenePaused(runtimeScene: gdjs.RuntimeScene): void {}
+
+    /**
+     * Called whenever the scene owning the object is resumed after a pause.
+     * This should *not* impact objects, but some may need to inform their renderer.
+     *
+     * @param runtimeScene The scene owning the object.
+     */
+    onSceneResumed(runtimeScene: gdjs.RuntimeScene): void {}
+
     //Rendering:
     /**
-     * Called with a callback function that should be called with the internal
-     * object used for rendering by the object (PIXI.DisplayObject...)
-     *
-     * @return The internal rendered object (PIXI.DisplayObject...)
+     * @return The internal object for a 2D rendering (PIXI.DisplayObject...)
      */
-    getRendererObject(): any {
+    getRendererObject(): RendererObjectInterface | null | undefined {
+      return undefined;
+    }
+
+    /**
+     * @return The internal object for a 3D rendering (PIXI.DisplayObject...)
+     */
+    get3DRendererObject(): THREE.Object3D | null | undefined {
       return undefined;
     }
 
@@ -472,7 +567,21 @@ namespace gdjs {
         return;
       }
       this.x = x;
+      this.invalidateHitboxes();
+    }
+
+    /**
+     * Send a signal that the object hitboxes are no longer up to date.
+     *
+     * The signal is propagated to parents so
+     * {@link gdjs.RuntimeObject.hitBoxesDirty} should never be modified
+     * directly.
+     */
+    invalidateHitboxes(): void {
+      // TODO EBO Check that no community extension set hitBoxesDirty to true
+      // directly.
       this.hitBoxesDirty = true;
+      this._runtimeScene.onChildrenLocationChanged();
     }
 
     /**
@@ -494,7 +603,7 @@ namespace gdjs {
         return;
       }
       this.y = y;
-      this.hitBoxesDirty = true;
+      this.invalidateHitboxes();
     }
 
     /**
@@ -550,10 +659,15 @@ namespace gdjs {
       );
     }
 
+    /**
+     * @param angle The targeted direction angle.
+     * @param speed The rotation speed.
+     * @param instanceContainer The container the object belongs to (deprecated - can be omitted).
+     */
     rotateTowardAngle(
       angle: float,
       speed: float,
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer?: gdjs.RuntimeInstanceContainer
     ): void {
       if (speed === 0) {
         this.setAngle(angle);
@@ -566,10 +680,7 @@ namespace gdjs {
       const diffWasPositive = angularDiff >= 0;
       let newAngle =
         this.getAngle() +
-        ((diffWasPositive ? -1.0 : 1.0) *
-          speed *
-          this.getElapsedTime(runtimeScene)) /
-          1000;
+        ((diffWasPositive ? -1.0 : 1.0) * speed * this.getElapsedTime()) / 1000;
 
       if (
         // @ts-ignore
@@ -594,12 +705,13 @@ namespace gdjs {
      * Rotate the object at the given speed
      *
      * @param speed The speed, in degrees per second.
-     * @param runtimeScene The scene where the object is displayed.
+     * @param instanceContainer The container the object belongs to (deprecated - can be omitted).
      */
-    rotate(speed: float, runtimeScene: gdjs.RuntimeScene): void {
-      this.setAngle(
-        this.getAngle() + (speed * this.getElapsedTime(runtimeScene)) / 1000
-      );
+    rotate(
+      speed: float,
+      instanceContainer?: gdjs.RuntimeInstanceContainer
+    ): void {
+      this.setAngle(this.getAngle() + (speed * this.getElapsedTime()) / 1000);
     }
 
     /**
@@ -612,7 +724,7 @@ namespace gdjs {
         return;
       }
       this.angle = angle;
-      this.hitBoxesDirty = true;
+      this.invalidateHitboxes();
     }
 
     /**
@@ -640,6 +752,11 @@ namespace gdjs {
       if (rendererObject) {
         oldLayer.getRenderer().removeRendererObject(rendererObject);
         newLayer.getRenderer().addRendererObject(rendererObject, this.zOrder);
+      }
+      const rendererObject3D = this.get3DRendererObject();
+      if (rendererObject3D) {
+        oldLayer.getRenderer().remove3DRendererObject(rendererObject3D);
+        newLayer.getRenderer().add3DRendererObject(rendererObject3D);
       }
     }
 
@@ -672,11 +789,10 @@ namespace gdjs {
         return;
       }
       this.zOrder = z;
-      if (this.getRendererObject()) {
+      const rendererObject = this.getRendererObject();
+      if (rendererObject) {
         const theLayer = this._runtimeScene.getLayer(this.layer);
-        theLayer
-          .getRenderer()
-          .changeRendererObjectZOrder(this.getRendererObject(), z);
+        theLayer.getRenderer().changeRendererObjectZOrder(rendererObject, z);
       }
     }
 
@@ -863,6 +979,46 @@ namespace gdjs {
     };
 
     /**
+     * Shortcut to get the first value of an array variable as a string.
+     */
+    static getFirstVariableString = function (array: gdjs.Variable): string {
+      if (array.getChildrenCount() === 0) {
+        return '';
+      }
+      return array.getAllChildrenArray()[0].getAsString();
+    };
+
+    /**
+     * Shortcut to get the first value of an array variable as a number.
+     */
+    static getFirstVariableNumber = function (array: gdjs.Variable): number {
+      if (array.getChildrenCount() === 0) {
+        return 0;
+      }
+      return array.getAllChildrenArray()[0].getAsNumber();
+    };
+
+    /**
+     * Shortcut to get the last value of an array variable as a string.
+     */
+    static getLastVariableString = function (array: gdjs.Variable): string {
+      const children = array.getAllChildrenArray();
+      return children.length === 0
+        ? ''
+        : children[children.length - 1].getAsString();
+    };
+
+    /**
+     * Shortcut to get the last value of an array variable as a number.
+     */
+    static getLastVariableNumber = function (array: gdjs.Variable): number {
+      const children = array.getAllChildrenArray();
+      return children.length === 0
+        ? 0
+        : children[children.length - 1].getAsNumber();
+    };
+
+    /**
      * Shortcut to test if a variable exists for the object.
      * @param name The variable to be tested
      * @return true if the variable exists.
@@ -885,15 +1041,15 @@ namespace gdjs {
      * @param effectData The data describing the effect to add.
      */
     addEffect(effectData: EffectData): boolean {
+      const rendererObject = this.getRendererObject();
+      if (!rendererObject) {
+        return false;
+      }
+
       return this._runtimeScene
         .getGame()
         .getEffectsManager()
-        .addEffect(
-          effectData,
-          this._rendererEffects,
-          this.getRendererObject(),
-          this
-        );
+        .addEffect(effectData, this._rendererEffects, this);
     }
 
     /**
@@ -901,31 +1057,36 @@ namespace gdjs {
      * @param effectName The name of the effect.
      */
     removeEffect(effectName: string): boolean {
+      const rendererObject = this.getRendererObject();
+      if (!rendererObject) return false;
+
       return this._runtimeScene
         .getGame()
         .getEffectsManager()
-        .removeEffect(
-          this._rendererEffects,
-          this.getRendererObject(),
-          effectName
-        );
+        .removeEffect(this._rendererEffects, this, effectName);
     }
 
     /**
      * Remove all effects.
      */
     clearEffects(): boolean {
+      const rendererObject = this.getRendererObject();
+      if (!rendererObject) return false;
+
       this._rendererEffects = {};
-      return this._runtimeScene
-        .getGame()
-        .getEffectsManager()
-        .clearEffects(this.getRendererObject());
+      return (
+        this._runtimeScene
+          .getGame()
+          .getEffectsManager()
+          // @ts-expect-error - the effects manager is typed with the PIXI object.
+          .clearEffects(rendererObject)
+      );
     }
 
     /**
-     * Change an effect parameter value (for parameters that are numbers).
+     * Change an effect property value (for properties that are numbers).
      * @param name The name of the effect to update.
-     * @param parameterName The name of the parameter to update.
+     * @param parameterName The name of the property to update.
      * @param value The new value (number).
      */
     setEffectDoubleParameter(
@@ -945,9 +1106,9 @@ namespace gdjs {
     }
 
     /**
-     * Change an effect parameter value (for parameters that are strings).
+     * Change an effect property value (for properties that are strings).
      * @param name The name of the effect to update.
-     * @param parameterName The name of the parameter to update.
+     * @param parameterName The name of the property to update.
      * @param value The new value (string).
      */
     setEffectStringParameter(
@@ -967,9 +1128,9 @@ namespace gdjs {
     }
 
     /**
-     * Change an effect parameter value (for parameters that are booleans).
+     * Change an effect property value (for properties that are booleans).
      * @param name The name of the effect to update.
-     * @param parameterName The name of the parameter to update.
+     * @param parameterName The name of the property to update.
      * @param value The new value (boolean).
      */
     setEffectBooleanParameter(
@@ -1008,7 +1169,7 @@ namespace gdjs {
       this._runtimeScene
         .getGame()
         .getEffectsManager()
-        .enableEffect(this._rendererEffects, name, enable);
+        .enableEffect(this._rendererEffects, this, name, enable);
     }
 
     /**
@@ -1020,7 +1181,7 @@ namespace gdjs {
       return this._runtimeScene
         .getGame()
         .getEffectsManager()
-        .isEffectEnabled(this._rendererEffects, name);
+        .isEffectEnabled(this._rendererEffects, this, name);
     }
 
     /**
@@ -1088,7 +1249,7 @@ namespace gdjs {
     }
 
     /**
-     * Return the width of the object.
+     * Return the height of the object.
      * @return The height of the object
      */
     getHeight(): float {
@@ -1189,7 +1350,21 @@ namespace gdjs {
      * @param multiplier Set the force multiplier
      */
     addForce(x: float, y: float, multiplier: integer): void {
-      this._forces.push(this._getRecycledForce(x, y, multiplier));
+      if (multiplier === 1) {
+        this._permanentForceX += x;
+        this._permanentForceY += y;
+      } else if (
+        multiplier === 0 &&
+        this._instantForces.length > 0 &&
+        this._instantForces[0].getMultiplier() === 0
+      ) {
+        // Avoid to instantiate new a Force for each instance force.
+        this._instantForces[0].add(x, y);
+      } else {
+        // Handle legacy forces with multiplier different from 0 and 1
+        // (or the 1st instant force).
+        this._instantForces.push(this._getRecycledForce(x, y, multiplier));
+      }
     }
 
     /**
@@ -1204,7 +1379,7 @@ namespace gdjs {
       //TODO: Benchmark with Math.PI
       const forceX = Math.cos(angleInRadians) * len;
       const forceY = Math.sin(angleInRadians) * len;
-      this._forces.push(this._getRecycledForce(forceX, forceY, multiplier));
+      this.addForce(forceX, forceY, multiplier);
     }
 
     /**
@@ -1226,7 +1401,7 @@ namespace gdjs {
       );
       const forceX = Math.cos(angleInRadians) * len;
       const forceY = Math.sin(angleInRadians) * len;
-      this._forces.push(this._getRecycledForce(forceX, forceY, multiplier));
+      this.addForce(forceX, forceY, multiplier);
     }
 
     /**
@@ -1237,7 +1412,7 @@ namespace gdjs {
      * @param multiplier Set the force multiplier
      */
     addForceTowardObject(
-      object: gdjs.RuntimeObject,
+      object: gdjs.RuntimeObject | null,
       len: float,
       multiplier: integer
     ): void {
@@ -1258,9 +1433,11 @@ namespace gdjs {
     clearForces(): void {
       RuntimeObject.forcesGarbage.push.apply(
         RuntimeObject.forcesGarbage,
-        this._forces
+        this._instantForces
       );
-      this._forces.length = 0;
+      this._instantForces.length = 0;
+      this._permanentForceX = 0;
+      this._permanentForceY = 0;
     }
 
     /**
@@ -1268,7 +1445,11 @@ namespace gdjs {
      * @return true if no forces are applied on the object.
      */
     hasNoForces(): boolean {
-      return this._forces.length === 0;
+      return (
+        this._instantForces.length === 0 &&
+        this._permanentForceX === 0 &&
+        this._permanentForceY === 0
+      );
     }
 
     /**
@@ -1276,8 +1457,8 @@ namespace gdjs {
      * remove null ones.
      */
     updateForces(elapsedTime: float): void {
-      for (let i = 0; i < this._forces.length; ) {
-        const force = this._forces[i];
+      for (let i = 0; i < this._instantForces.length; ) {
+        const force = this._instantForces[i];
         const multiplier = force.getMultiplier();
         if (multiplier === 1) {
           // Permanent force
@@ -1289,7 +1470,7 @@ namespace gdjs {
             force.getLength() <= 0.001
           ) {
             RuntimeObject.forcesGarbage.push(force);
-            this._forces.splice(i, 1);
+            this._instantForces.splice(i, 1);
           } else {
             // Deprecated way of updating forces progressively.
             force.setLength(
@@ -1308,20 +1489,18 @@ namespace gdjs {
      * @return A force object.
      */
     getAverageForce(): gdjs.Force {
-      let averageX = 0;
-      let averageY = 0;
-      for (let i = 0, len = this._forces.length; i < len; ++i) {
-        averageX += this._forces[i].getX();
-        averageY += this._forces[i].getY();
+      this._totalForce.clear();
+      this._totalForce.add(this._permanentForceX, this._permanentForceY);
+      for (let i = 0, len = this._instantForces.length; i < len; ++i) {
+        this._totalForce.addForce(this._instantForces[i]);
       }
-      this._averageForce.setX(averageX);
-      this._averageForce.setY(averageY);
-      return this._averageForce;
+      return this._totalForce;
     }
 
     /**
      * Return true if the average angle of the forces applied on the object
      * is in a given range.
+     * @deprecated Use isTotalForceAngleAround instead.
      *
      * @param angle The angle to be tested.
      * @param toleranceInDegrees The length of the range :
@@ -1334,6 +1513,26 @@ namespace gdjs {
         averageAngle += 360;
       }
       return Math.abs(angle - averageAngle) < toleranceInDegrees / 2;
+    }
+
+    /**
+     * Return true if the angle of the total force applied on the object
+     * is in a given range.
+     *
+     * @param angle The angle to be tested.
+     * @param toleranceInDegrees The maximum distance from the given angle.
+     * @return true if the difference between the force angle the given `angle`
+     * is less or equals the `toleranceInDegrees`.
+     */
+    isTotalForceAngleAround(angle: float, toleranceInDegrees: float): boolean {
+      return (
+        Math.abs(
+          gdjs.evtTools.common.angleDifference(
+            this.getAverageForce().getAngle(),
+            angle
+          )
+        ) <= toleranceInDegrees
+      );
     }
 
     //Hit boxes and collision :
@@ -1437,6 +1636,18 @@ namespace gdjs {
         this.getDrawableX() + centerX,
         this.getDrawableY() + centerY
       );
+    }
+
+    isIncludedInParentCollisionMask(): boolean {
+      return this._isIncludedInParentCollisionMask;
+    }
+
+    setIncludedInParentCollisionMask(isIncluded: boolean): void {
+      const wasIncluded = this._isIncludedInParentCollisionMask;
+      this._isIncludedInParentCollisionMask = isIncluded;
+      if (wasIncluded !== isIncluded) {
+        this._runtimeScene.onChildrenLocationChanged();
+      }
     }
 
     /**
@@ -1569,18 +1780,22 @@ namespace gdjs {
     /**
      * Call each behavior stepPreEvents method.
      */
-    stepBehaviorsPreEvents(runtimeScene): void {
+    stepBehaviorsPreEvents(
+      instanceContainer: gdjs.RuntimeInstanceContainer
+    ): void {
       for (let i = 0, len = this._behaviors.length; i < len; ++i) {
-        this._behaviors[i].stepPreEvents(runtimeScene);
+        this._behaviors[i].stepPreEvents(instanceContainer);
       }
     }
 
     /**
      * Call each behavior stepPostEvents method.
      */
-    stepBehaviorsPostEvents(runtimeScene): void {
+    stepBehaviorsPostEvents(
+      instanceContainer: gdjs.RuntimeInstanceContainer
+    ): void {
       for (let i = 0, len = this._behaviors.length; i < len; ++i) {
-        this._behaviors[i].stepPostEvents(runtimeScene);
+        this._behaviors[i].stepPostEvents(instanceContainer);
       }
     }
 
@@ -1666,7 +1881,7 @@ namespace gdjs {
     }
 
     /**
-     * Create the behavior decribed by the given BehaviorData
+     * Create the behavior described by the given BehaviorData
      *
      * @param behaviorData The data to be used to construct the behavior.
      * @returns true if the behavior was properly created, false otherwise.
@@ -1681,7 +1896,9 @@ namespace gdjs {
         behaviorData,
         this
       );
-      this._behaviors.push(newRuntimeBehavior);
+      if (newRuntimeBehavior.usesLifecycleFunction()) {
+        this._behaviors.push(newRuntimeBehavior);
+      }
       this._behaviorsTable.put(behaviorData.name, newRuntimeBehavior);
       return true;
     }
@@ -1700,10 +1917,13 @@ namespace gdjs {
     }
 
     /**
-     * Test a timer elapsed time, if the timer doesn't exist it is created
-     * @param timerName The timer name
-     * @param timeInSeconds The time value to check in seconds
-     * @return True if the timer exists and its value is greater than or equal than the given time, false otherwise
+     * Compare a timer elapsed time. If the timer does not exist, it is created.
+     *
+     * @deprecated prefer using `getTimerElapsedTimeInSecondsOrNaN`.
+     *
+     * @param timerName The timer name.
+     * @param timeInSeconds The time value to check in seconds.
+     * @return True if the timer exists and its value is greater than or equal than the given time, false otherwise.
      */
     timerElapsedTime(timerName: string, timeInSeconds: float): boolean {
       if (!this._timers.containsKey(timerName)) {
@@ -1714,9 +1934,9 @@ namespace gdjs {
     }
 
     /**
-     * Test a if a timer is paused
-     * @param timerName The timer name
-     * @return True if the timer exists and is paused, false otherwise
+     * Test a if a timer is paused.
+     * @param timerName The timer name.
+     * @return True if the timer exists and is paused, false otherwise.
      */
     timerPaused(timerName: string): boolean {
       if (!this._timers.containsKey(timerName)) {
@@ -1726,8 +1946,8 @@ namespace gdjs {
     }
 
     /**
-     * Reset a timer, if the timer doesn't exist it is created
-     * @param timerName The timer name
+     * Reset a timer. If the timer doesn't exist it is created.
+     * @param timerName The timer name.
      */
     resetTimer(timerName: string): void {
       if (!this._timers.containsKey(timerName)) {
@@ -1737,8 +1957,8 @@ namespace gdjs {
     }
 
     /**
-     * Pause a timer, if the timer doesn't exist it is created
-     * @param timerName The timer name
+     * Pause a timer. If the timer doesn't exist it is created.
+     * @param timerName The timer name.
      */
     pauseTimer(timerName: string): void {
       if (!this._timers.containsKey(timerName)) {
@@ -1748,8 +1968,8 @@ namespace gdjs {
     }
 
     /**
-     * Unpause a timer, if the timer doesn't exist it is created
-     * @param timerName The timer name
+     * Unpause a timer. If the timer doesn't exist it is created.
+     * @param timerName The timer name.
      */
     unpauseTimer(timerName: string): void {
       if (!this._timers.containsKey(timerName)) {
@@ -1760,7 +1980,7 @@ namespace gdjs {
 
     /**
      * Remove a timer
-     * @param timerName The timer name
+     * @param timerName The timer name.
      */
     removeTimer(timerName: string): void {
       if (this._timers.containsKey(timerName)) {
@@ -1770,12 +1990,32 @@ namespace gdjs {
 
     /**
      * Get a timer elapsed time.
-     * @param timerName The timer name
-     * @return The timer elapsed time in seconds, 0 if the timer doesn't exist
+     *
+     * This is used by expressions to return 0 when a timer doesn't exist
+     * because numeric expressions must always return a number.
+     *
+     * @param timerName The timer name.
+     * @return The timer elapsed time in seconds, 0 if the timer doesn't exist.
      */
     getTimerElapsedTimeInSeconds(timerName: string): float {
       if (!this._timers.containsKey(timerName)) {
         return 0;
+      }
+      return this._timers.get(timerName).getTime() / 1000.0;
+    }
+
+    /**
+     * Get a timer elapsed time.
+     *
+     * This is used by conditions to return false when a timer doesn't exist,
+     * no matter the relational operator.
+     *
+     * @param timerName The timer name.
+     * @return The timer elapsed time in seconds, NaN if the timer doesn't exist.
+     */
+    getTimerElapsedTimeInSecondsOrNaN(timerName: string): float {
+      if (!this._timers.containsKey(timerName)) {
+        return Number.NaN;
       }
       return this._timers.get(timerName).getTime() / 1000.0;
     }
@@ -1788,7 +2028,7 @@ namespace gdjs {
      * @return true if the object was moved
      */
     separateFromObjects(
-      objects: RuntimeObject[],
+      objects: gdjs.RuntimeObject[],
       ignoreTouchingEdges: boolean
     ): boolean {
       let moveXArray: Array<float> = separateFromObjectsStatics.moveXArray;
@@ -2038,10 +2278,12 @@ namespace gdjs {
      * @param angleInDegrees The angle between the object and the target, in degrees.
      */
     putAroundObject(
-      obj: gdjs.RuntimeObject,
+      obj: gdjs.RuntimeObject | null,
       distance: float,
       angleInDegrees: float
     ): void {
+      if (!obj) return;
+
       this.putAround(
         obj.getDrawableX() + obj.getCenterX(),
         obj.getDrawableY() + obj.getCenterY(),
@@ -2246,8 +2488,7 @@ namespace gdjs {
       const diffX = this.getDrawableX() + objCenterX - rayCenterWorldX;
       const diffY = this.getDrawableY() + objCenterY - rayCenterWorldY;
 
-      // @ts-ignore
-      let result = gdjs.Polygon.raycastTestStatics.result;
+      let result = raycastTestStatics.result;
       result.collision = false;
       if (
         // As an optimization, avoid computing the square root of the two boundings radius
@@ -2261,26 +2502,32 @@ namespace gdjs {
       }
 
       // Do a real check if necessary.
-      let testSqDist = closest ? raySqBoundingRadius : 0;
-      const hitBoxes = this.getHitBoxesAround(x, y, endX, endY);
-      for (const hitBox of hitBoxes) {
-        const res = gdjs.Polygon.raycastTest(hitBox, x, y, endX, endY);
-        if (res.collision) {
-          if (closest && res.closeSqDist < testSqDist) {
-            testSqDist = res.closeSqDist;
-            result = res;
-          } else {
-            if (
-              !closest &&
-              res.farSqDist > testSqDist &&
-              res.farSqDist <= raySqBoundingRadius
-            ) {
-              testSqDist = res.farSqDist;
-              result = res;
-            }
+      if (closest) {
+        let sqDistMin = Number.MAX_VALUE;
+        const hitBoxes = this.getHitBoxesAround(x, y, endX, endY);
+        for (const hitBox of hitBoxes) {
+          const res = gdjs.Polygon.raycastTest(hitBox, x, y, endX, endY);
+          if (res.collision && res.closeSqDist < sqDistMin) {
+            sqDistMin = res.closeSqDist;
+            gdjs.Polygon.copyRaycastTestResult(res, result);
+          }
+        }
+      } else {
+        let sqDistMax = -Number.MAX_VALUE;
+        const hitBoxes = this.getHitBoxesAround(x, y, endX, endY);
+        for (const hitBox of hitBoxes) {
+          const res = gdjs.Polygon.raycastTest(hitBox, x, y, endX, endY);
+          if (
+            res.collision &&
+            res.farSqDist > sqDistMax &&
+            res.farSqDist <= raySqBoundingRadius
+          ) {
+            sqDistMax = res.farSqDist;
+            gdjs.Polygon.copyRaycastTestResult(res, result);
           }
         }
       }
+
       return result;
     }
 
@@ -2289,6 +2536,7 @@ namespace gdjs {
      *
      * The position should be in "world" coordinates, i.e use gdjs.Layer.convertCoords
      * if you need to pass the mouse or a touch position that you get from gdjs.InputManager.
+     * To check if a point is inside the object collision mask, you can use `isCollidingWithPoint` instead.
      *
      */
     insideObject(x: float, y: float): boolean {
@@ -2322,12 +2570,18 @@ namespace gdjs {
      *
      * @return true if the cursor, or any touch, is on the object.
      */
-    cursorOnObject(runtimeScene: RuntimeScene): boolean {
-      const inputManager = runtimeScene.getGame().getInputManager();
-      const layer = runtimeScene.getLayer(this.layer);
+    cursorOnObject(instanceContainer: gdjs.RuntimeInstanceContainer): boolean {
+      const workingPoint: FloatPoint = gdjs.staticArray(
+        RuntimeObject.prototype.cursorOnObject
+      ) as FloatPoint;
+      workingPoint.length = 2;
+      const inputManager = instanceContainer.getGame().getInputManager();
+      const layer = instanceContainer.getLayer(this.layer);
       const mousePos = layer.convertCoords(
-        inputManager.getMouseX(),
-        inputManager.getMouseY()
+        inputManager.getCursorX(),
+        inputManager.getCursorY(),
+        0,
+        workingPoint
       );
       if (this.insideObject(mousePos[0], mousePos[1])) {
         return true;
@@ -2336,7 +2590,9 @@ namespace gdjs {
       for (let i = 0; i < touchIds.length; ++i) {
         const touchPos = layer.convertCoords(
           inputManager.getTouchX(touchIds[i]),
-          inputManager.getTouchY(touchIds[i])
+          inputManager.getTouchY(touchIds[i]),
+          0,
+          workingPoint
         );
         if (this.insideObject(touchPos[0], touchPos[1])) {
           return true;
@@ -2403,6 +2659,11 @@ namespace gdjs {
     setVariableString = RuntimeObject.setVariableString;
     getVariableBoolean = RuntimeObject.getVariableBoolean;
     setVariableBoolean = RuntimeObject.setVariableBoolean;
+    getVariableChildCount = RuntimeObject.getVariableChildCount;
+    getFirstVariableNumber = RuntimeObject.getFirstVariableNumber;
+    getFirstVariableString = RuntimeObject.getFirstVariableString;
+    getLastVariableNumber = RuntimeObject.getLastVariableNumber;
+    getLastVariableString = RuntimeObject.getLastVariableString;
     toggleVariableBoolean = RuntimeObject.toggleVariableBoolean;
     variableChildExists = RuntimeObject.variableChildExists;
     variableRemoveChild = RuntimeObject.variableRemoveChild;

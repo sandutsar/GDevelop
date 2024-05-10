@@ -1,16 +1,11 @@
 // @ts-check
 
 describe('gdjs.EffectsManager', () => {
-  const runtimeGame = new gdjs.RuntimeGame({
-    variables: [],
-    // @ts-ignore TODO: make a function to create an empty game and use it across tests.
-    properties: { windowWidth: 800, windowHeight: 600 },
-    resources: { resources: [] },
-  });
+  const runtimeGame = gdjs.getPixiRuntimeGame();
 
   it('can add effects on a runtime object', () => {
     const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
-    const object = new gdjs.TestRuntimeObject(runtimeScene, {
+    const object = new gdjs.TestRuntimeObjectWithFakeRenderer(runtimeScene, {
       name: 'obj1',
       type: '',
       variables: [],
@@ -111,6 +106,7 @@ describe('gdjs.EffectsManager', () => {
       behaviorsSharedData: [],
       objects: [],
       instances: [],
+      usedResources: [],
     });
 
     const runtimeLayer = runtimeScene.getLayer('');

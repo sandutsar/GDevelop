@@ -5,7 +5,7 @@ import FlatButton from '../../UI/FlatButton';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Radio from '@material-ui/core/Radio';
 import RadioGroup from '@material-ui/core/RadioGroup';
-import Dialog from '../../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../../UI/Dialog';
 import { mapFor } from '../../Utils/MapFor';
 import Text from '../../UI/Text';
 import BackgroundText from '../../UI/BackgroundText';
@@ -21,7 +21,7 @@ type Props = {|
   layoutName?: ?string,
   onClose: () => void,
   project: gdProject,
-  title?: React.Node,
+  title: React.Node,
   helpTexts?: Array<React.Node>,
 |};
 
@@ -57,11 +57,10 @@ export default function ExternalPropertiesDialog({
       primary={false}
       onClick={onClose}
     />,
-    <FlatButton
+    <DialogPrimaryButton
       key="choose"
       label={<Trans>Choose</Trans>}
       primary
-      keyboardFocused
       onClick={onClick}
       disabled={!selectedLayoutName}
     />,
@@ -73,18 +72,17 @@ export default function ExternalPropertiesDialog({
 
   return (
     <Dialog
+      title={title}
       actions={actions}
       open={open}
-      title={title}
       onRequestClose={onClose}
-      cannotBeDismissed={false}
-      maxWidth="sm"
       onApply={onClick}
+      maxWidth="sm"
     >
-      <Column>
+      <Column noMargin>
         {helpTexts &&
-          helpTexts.map(helpText => (
-            <Line>
+          helpTexts.map((helpText, index) => (
+            <Line key={index}>
               <BackgroundText>{helpText}</BackgroundText>
             </Line>
           ))}
@@ -103,7 +101,7 @@ export default function ExternalPropertiesDialog({
             <FormControlLabel
               key={name}
               value={name}
-              control={<Radio color="primary" />}
+              control={<Radio color="secondary" />}
               label={name}
             />
           ))}

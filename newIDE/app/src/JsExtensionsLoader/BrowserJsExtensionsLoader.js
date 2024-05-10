@@ -84,6 +84,18 @@ const jsExtensions = [
     objectsRenderingServiceModules: {},
   },
   {
+    name: 'Leaderboards',
+    // $FlowExpectedError - this path is ignored for Flow.
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Leaderboards/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'PlayerAuthentication',
+    // $FlowExpectedError - this path is ignored for Flow.
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/PlayerAuthentication/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
     name: 'DialogueTree',
     // $FlowExpectedError - this path is ignored for Flow.
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/DialogueTree/JsExtension.js'),
@@ -106,7 +118,7 @@ const jsExtensions = [
       // $FlowExpectedError - this path is ignored for Flow.
       'pixi-tilemap/dist/pixi-tilemap.umd': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/pixi-tilemap/dist/pixi-tilemap.umd'),
       // $FlowExpectedError - this path is ignored for Flow.
-      'pixi-tilemap-helper': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/pixi-tilemap-helper'),
+      'helper/TileMapHelper': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/helper/TileMapHelper.js'),
       // $FlowExpectedError - this path is ignored for Flow.
       'pako/dist/pako.min': require('GDJS-for-web-app-only/Runtime/Extensions/TileMap/pako/dist/pako.min'),
     },
@@ -147,6 +159,24 @@ const jsExtensions = [
     extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Screenshot/JsExtension.js'),
     objectsRenderingServiceModules: {},
   },
+  {
+    name: 'TextInput',
+    // $FlowExpectedError - this path is ignored for Flow.
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/TextInput/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'Scene3D',
+    // $FlowExpectedError - this path is ignored for Flow.
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/3D/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
+  {
+    name: 'SpineObject',
+    // $FlowExpectedError - this path is ignored for Flow.
+    extensionModule: require('GDJS-for-web-app-only/Runtime/Extensions/Spine/JsExtension.js'),
+    objectsRenderingServiceModules: {},
+  },
 ];
 
 type MakeExtensionsLoaderArguments = {|
@@ -175,8 +205,6 @@ export default function makeExtensionsLoader({
         jsExtensions
           .filter(({ name }) => !filterExamples || !name.includes('Example'))
           .map(({ name, extensionModule, objectsRenderingServiceModules }) => {
-            // Load any editor for objects, if we have somewhere where
-            // to register them.
             if (
               objectsEditorService &&
               extensionModule.registerEditorConfigurations
@@ -186,25 +214,23 @@ export default function makeExtensionsLoader({
               );
             }
 
-            // Register modules for ObjectsRenderingService
-            if (objectsRenderingService && objectsRenderingServiceModules) {
-              for (let requirePath in objectsRenderingServiceModules) {
-                objectsRenderingService.registerModule(
-                  requirePath,
-                  objectsRenderingServiceModules[requirePath]
+            if (objectsRenderingService) {
+              if (objectsRenderingServiceModules) {
+                for (const requirePath in objectsRenderingServiceModules) {
+                  objectsRenderingService.registerModule(
+                    requirePath,
+                    objectsRenderingServiceModules[requirePath]
+                  );
+                }
+              }
+              if (extensionModule.registerInstanceRenderers) {
+                extensionModule.registerInstanceRenderers(
+                  objectsRenderingService
                 );
               }
-            }
-
-            // Load any renderer for objects, if we have somewhere where
-            // to register them.
-            if (
-              objectsRenderingService &&
-              extensionModule.registerInstanceRenderers
-            ) {
-              extensionModule.registerInstanceRenderers(
-                objectsRenderingService
-              );
+              if (extensionModule.registerClearCache) {
+                extensionModule.registerClearCache(objectsRenderingService);
+              }
             }
 
             return {

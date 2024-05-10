@@ -1,29 +1,37 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import { t } from '@lingui/macro';
-import React, { Component } from 'react';
+import * as React from 'react';
 import FlatButton from '../UI/FlatButton';
 import ObjectsEditorService from './ObjectsEditorService';
-import Dialog from '../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import HelpButton from '../UI/HelpButton';
 import BehaviorsEditor from '../BehaviorsEditor';
-import { Tabs, Tab } from '../UI/Tabs';
+import { Tabs } from '../UI/Tabs';
 import { useSerializableObjectCancelableEditor } from '../Utils/SerializableObjectCancelableEditor';
 import SemiControlledTextField from '../UI/SemiControlledTextField';
 import { Column, Line } from '../UI/Grid';
 import { type EditorProps } from './Editors/EditorProps.flow';
-import {
-  type ResourceSource,
-  type ChooseResourceFunction,
-} from '../ResourcesList/ResourceSource';
-import { type ResourceExternalEditor } from '../ResourcesList/ResourceExternalEditor.flow';
+import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
 import { type UnsavedChanges } from '../MainFrame/UnsavedChangesContext';
 import useForceUpdate from '../Utils/UseForceUpdate';
 import HotReloadPreviewButton, {
   type HotReloadPreviewButtonProps,
 } from '../HotReload/HotReloadPreviewButton';
 import EffectsList from '../EffectsList';
-import VariablesList from '../VariablesList/index';
+import VariablesList from '../VariablesList/VariablesList';
+import { sendBehaviorsEditorShown } from '../Utils/Analytics/EventSender';
+import useDismissableTutorialMessage from '../Hints/useDismissableTutorialMessage';
+import useAlertDialog from '../UI/Alert/useAlertDialog';
+import ErrorBoundary from '../UI/ErrorBoundary';
+
+const gd: libGDevelop = global.gd;
+
+export type ObjectEditorTab =
+  | 'properties'
+  | 'behaviors'
+  | 'variables'
+  | 'effects';
 
 type Props = {|
   open: boolean,
@@ -34,56 +42,141 @@ type Props = {|
 
   // Object renaming:
   onRename: string => void,
-  canRenameObject: string => boolean,
+  getValidatedObjectOrGroupName: string => string,
 
   // Passed down to object editors:
   project: gdProject,
+  layout?: gdLayout,
   onComputeAllVariableNames: () => Array<string>,
-  resourceSources: Array<ResourceSource>,
-  onChooseResource: ChooseResourceFunction,
-  resourceExternalEditors: Array<ResourceExternalEditor>,
+  resourceManagementProps: ResourceManagementProps,
   unsavedChanges?: UnsavedChanges,
   onUpdateBehaviorsSharedData: () => void,
-  initialTab: ?string,
+  initialTab: ?ObjectEditorTab,
+
+  // Passed down to the behaviors editor:
+  eventsFunctionsExtension?: gdEventsFunctionsExtension,
 
   // Preview:
   hotReloadPreviewButtonProps: HotReloadPreviewButtonProps,
+  openBehaviorEvents: (extensionName: string, behaviorName: string) => void,
 |};
 
 type InnerDialogProps = {|
   ...Props,
-  editorComponent: ?Class<React.Component<EditorProps, any>>,
+  editorComponent: ?React.ComponentType<EditorProps>,
   objectName: string,
   helpPagePath: ?string,
   object: gdObject,
 |};
 
 const InnerDialog = (props: InnerDialogProps) => {
-  const [currentTab, setCurrentTab] = React.useState(
+  const { showConfirmation } = useAlertDialog();
+  const { openBehaviorEvents } = props;
+  const [currentTab, setCurrentTab] = React.useState<ObjectEditorTab>(
     props.initialTab || 'properties'
   );
-  const [newObjectName, setNewObjectName] = React.useState(props.objectName);
+  const [objectName, setObjectName] = React.useState(props.objectName);
   const forceUpdate = useForceUpdate();
-  const onCancelChanges = useSerializableObjectCancelableEditor({
+  const {
+    onCancelChanges,
+    notifyOfChange,
+    hasUnsavedChanges,
+    getOriginalContentSerializedElement,
+  } = useSerializableObjectCancelableEditor({
     serializableObject: props.object,
     useProjectToUnserialize: props.project,
     onCancel: props.onCancel,
+    resetThenClearPersistentUuid: true,
   });
 
-  const EditorComponent = props.editorComponent;
+  // Don't use a memo for this because metadata from custom objects are built
+  // from event-based object when extensions are refreshed after an extension
+  // installation.
+  const objectMetadata = gd.MetadataProvider.getObjectMetadata(
+    props.project.getCurrentPlatform(),
+    props.object.getType()
+  );
 
-  const onApply = () => {
+  const EditorComponent: ?React.ComponentType<EditorProps> =
+    props.editorComponent;
+
+  const onApply = async () => {
     props.onApply();
+
+    const changeset = gd.WholeProjectRefactorer.computeChangesetForVariablesContainer(
+      props.project,
+      getOriginalContentSerializedElement().getChild('variables'),
+      props.object.getVariables()
+    );
+    if (changeset.hasRemovedVariables()) {
+      // While we support refactoring that would remove all references (actions, conditions...)
+      // it's both a bit dangerous for the user and we would need to show the user what
+      // will be removed before doing so. For now, just clear the removed variables so they don't
+      // trigger any refactoring.
+      changeset.clearRemovedVariables();
+    }
+
+    gd.WholeProjectRefactorer.applyRefactoringForVariablesContainer(
+      props.project,
+      props.object.getVariables(),
+      changeset
+    );
+    props.object.clearPersistentUuid();
+
     // Do the renaming *after* applying changes, as "withSerializableObject"
     // HOC will unserialize the object to apply modifications, which will
     // override the name.
-    props.onRename(newObjectName);
+    props.onRename(objectName);
   };
+
+  const { DismissableTutorialMessage } = useDismissableTutorialMessage(
+    'intro-variables'
+  );
+
+  React.useEffect(
+    () => {
+      if (currentTab === 'behaviors') {
+        sendBehaviorsEditorShown({ parentEditor: 'object-editor-dialog' });
+      }
+    },
+    [currentTab]
+  );
+
+  const askConfirmationAndOpenBehaviorEvents = React.useCallback(
+    async (extensionName, behaviorName) => {
+      if (hasUnsavedChanges()) {
+        const answer = await showConfirmation({
+          title: t`Discard changes and open events`,
+          message: t`You've made some changes here. Are you sure you want to discard them and open the behavior events?`,
+          confirmButtonLabel: t`Yes, discard my changes`,
+          dismissButtonLabel: t`Stay there`,
+        });
+        if (!answer) return;
+      }
+      onCancelChanges();
+      openBehaviorEvents(extensionName, behaviorName);
+    },
+    [hasUnsavedChanges, onCancelChanges, openBehaviorEvents, showConfirmation]
+  );
 
   return (
     <Dialog
-      onApply={onApply}
+      title={<Trans>Edit {objectName}</Trans>}
       key={props.object && props.object.ptr}
+      actions={[
+        <FlatButton
+          key="cancel"
+          label={<Trans>Cancel</Trans>}
+          onClick={onCancelChanges}
+        />,
+        <DialogPrimaryButton
+          key="apply"
+          label={<Trans>Apply</Trans>}
+          id="apply-button"
+          primary
+          onClick={onApply}
+        />,
+      ]}
       secondaryActions={[
         <HelpButton key="help-button" helpPagePath={props.helpPagePath} />,
         <HotReloadPreviewButton
@@ -91,55 +184,43 @@ const InnerDialog = (props: InnerDialogProps) => {
           {...props.hotReloadPreviewButtonProps}
         />,
       ]}
-      actions={[
-        <FlatButton
-          key="cancel"
-          label={<Trans>Cancel</Trans>}
-          onClick={onCancelChanges}
-        />,
-        <FlatButton
-          key="apply"
-          label={<Trans>Apply</Trans>}
-          primary
-          keyboardFocused
-          onClick={onApply}
-        />,
-      ]}
-      noMargin
       onRequestClose={onCancelChanges}
-      cannotBeDismissed={true}
+      onApply={onApply}
       open={props.open}
-      noTitleMargin
       fullHeight
       flexBody
-      title={
-        <div>
-          <Tabs value={currentTab} onChange={setCurrentTab}>
-            <Tab
-              label={<Trans>Properties</Trans>}
-              value={'properties'}
-              key={'properties'}
-            />
-            <Tab
-              label={<Trans>Behaviors</Trans>}
-              value={'behaviors'}
-              key={'behaviors'}
-            />
-            <Tab
-              label={<Trans>Variables</Trans>}
-              value={'variables'}
-              key={'variables'}
-            />
-            <Tab
-              label={<Trans>Effects</Trans>}
-              value={'effects'}
-              key={'effects'}
-            />
-          </Tabs>
-        </div>
+      fixedContent={
+        <Tabs
+          value={currentTab}
+          onChange={setCurrentTab}
+          options={[
+            {
+              label: <Trans>Properties</Trans>,
+              value: 'properties',
+            },
+            {
+              label: <Trans>Behaviors</Trans>,
+              value: 'behaviors',
+              id: 'behaviors-tab',
+            },
+            {
+              label: <Trans>Variables</Trans>,
+              value: 'variables',
+            },
+            objectMetadata.hasDefaultBehavior(
+              'EffectCapability::EffectBehavior'
+            )
+              ? {
+                  label: <Trans>Effects</Trans>,
+                  value: 'effects',
+                }
+              : null,
+          ].filter(Boolean)}
+        />
       }
+      id="object-editor-dialog"
     >
-      {currentTab === 'properties' && EditorComponent && (
+      {currentTab === 'properties' && EditorComponent ? (
         <Column
           noMargin
           expand
@@ -150,85 +231,103 @@ const InnerDialog = (props: InnerDialogProps) => {
             true /* Ensure editors with large/scrolling children won't grow outside of the dialog. */
           }
         >
-          <Line>
-            <Column expand>
+          <EditorComponent
+            objectConfiguration={props.object.getConfiguration()}
+            project={props.project}
+            layout={props.layout}
+            object={props.object}
+            resourceManagementProps={props.resourceManagementProps}
+            onSizeUpdated={
+              forceUpdate /*Force update to ensure dialog is properly positioned*/
+            }
+            objectName={props.objectName}
+            onObjectUpdated={notifyOfChange}
+            renderObjectNameField={() => (
               <SemiControlledTextField
                 fullWidth
+                id="object-name"
                 commitOnBlur
                 floatingLabelText={<Trans>Object name</Trans>}
                 floatingLabelFixed
-                value={newObjectName}
-                hintText={t`Object Name`}
-                onChange={text => {
-                  if (text === newObjectName) return;
+                value={objectName}
+                translatableHintText={t`Object Name`}
+                onChange={newObjectName => {
+                  if (newObjectName === objectName) return;
 
-                  if (props.canRenameObject(text)) {
-                    setNewObjectName(text);
-                  }
+                  setObjectName(
+                    props.getValidatedObjectOrGroupName(newObjectName)
+                  );
+                  notifyOfChange();
                 }}
+                autoFocus="desktop"
               />
-            </Column>
-          </Line>
-          <EditorComponent
-            object={props.object}
-            project={props.project}
-            resourceSources={props.resourceSources}
-            onChooseResource={props.onChooseResource}
-            resourceExternalEditors={props.resourceExternalEditors}
-            onSizeUpdated={
-              forceUpdate /*Force update to ensure dialog is properly positionned*/
-            }
-            objectName={props.objectName}
+            )}
           />
         </Column>
-      )}
+      ) : null}
       {currentTab === 'behaviors' && (
         <BehaviorsEditor
           object={props.object}
           project={props.project}
-          resourceSources={props.resourceSources}
-          onChooseResource={props.onChooseResource}
-          resourceExternalEditors={props.resourceExternalEditors}
-          onSizeUpdated={
-            forceUpdate /*Force update to ensure dialog is properly positionned*/
-          }
-          onUpdateBehaviorsSharedData={props.onUpdateBehaviorsSharedData}
-        />
-      )}
-      {currentTab === 'variables' && (
-        <VariablesList
-          variablesContainer={props.object.getVariables()}
-          emptyExplanationMessage={
-            <Trans>
-              When you add variables to an object, any instance of the object
-              put on the scene or created during the game will have these
-              variables attached to it.
-            </Trans>
-          }
-          emptyExplanationSecondMessage={
-            <Trans>
-              For example, you can have a variable called Life representing the
-              health of the object.
-            </Trans>
-          }
-          helpPagePath={'/all-features/variables/object-variables'}
+          eventsFunctionsExtension={props.eventsFunctionsExtension}
+          resourceManagementProps={props.resourceManagementProps}
           onSizeUpdated={
             forceUpdate /*Force update to ensure dialog is properly positioned*/
           }
-          onComputeAllVariableNames={props.onComputeAllVariableNames}
+          onUpdateBehaviorsSharedData={props.onUpdateBehaviorsSharedData}
+          onBehaviorsUpdated={notifyOfChange}
+          openBehaviorEvents={askConfirmationAndOpenBehaviorEvents}
         />
+      )}
+      {currentTab === 'variables' && (
+        <Column expand noMargin>
+          {props.object.getVariables().count() > 0 &&
+            DismissableTutorialMessage && (
+              <Line>
+                <Column noMargin expand>
+                  {DismissableTutorialMessage}
+                </Column>
+              </Line>
+            )}
+          <VariablesList
+            variablesContainer={props.object.getVariables()}
+            emptyPlaceholderTitle={
+              <Trans>Add your first object variable</Trans>
+            }
+            emptyPlaceholderDescription={
+              <Trans>
+                These variables hold additional information on an object.
+              </Trans>
+            }
+            helpPagePath={'/all-features/variables/object-variables'}
+            onComputeAllVariableNames={props.onComputeAllVariableNames}
+            onVariablesUpdated={notifyOfChange}
+          />
+        </Column>
       )}
       {currentTab === 'effects' && (
         <EffectsList
           target="object"
+          // TODO (3D): declare the renderer type in object metadata.
+          layerRenderingType="2d"
           project={props.project}
-          resourceSources={props.resourceSources}
-          onChooseResource={props.onChooseResource}
-          resourceExternalEditors={props.resourceExternalEditors}
+          resourceManagementProps={props.resourceManagementProps}
           effectsContainer={props.object.getEffects()}
-          onEffectsUpdated={
-            forceUpdate /*Force update to ensure dialog is properly positionned*/
+          onEffectsRenamed={(oldName, newName) =>
+            // TODO EBO Refactor event-based object events when an effect is renamed.
+            props.layout &&
+            gd.WholeProjectRefactorer.renameObjectEffect(
+              props.project,
+              props.layout,
+              props.object,
+              oldName,
+              newName
+            )
           }
+          onEffectsUpdated={() => {
+            forceUpdate(); /*Force update to ensure dialog is properly positioned*/
+            notifyOfChange();
+          }}
         />
       )}
     </Dialog>
@@ -236,13 +335,15 @@ const InnerDialog = (props: InnerDialogProps) => {
 };
 
 type State = {|
-  editorComponent: ?Class<React.Component<EditorProps, any>>,
-  castToObjectType: ?(object: gdObject) => gdObject,
+  editorComponent: ?React.ComponentType<EditorProps>,
+  castToObjectType: ?(
+    objectConfiguration: gdObjectConfiguration
+  ) => gdObjectConfiguration,
   helpPagePath: ?string,
   objectName: string,
 |};
 
-export default class ObjectEditorDialog extends Component<Props, State> {
+class ObjectEditorDialog extends React.Component<Props, State> {
   state = {
     editorComponent: null,
     castToObjectType: null,
@@ -250,11 +351,13 @@ export default class ObjectEditorDialog extends Component<Props, State> {
     objectName: '',
   };
 
-  componentWillMount() {
+  // This should be updated, see https://reactjs.org/blog/2018/03/27/update-on-async-rendering.html.
+  UNSAFE_componentWillMount() {
     this._loadFrom(this.props.object);
   }
 
-  componentWillReceiveProps(newProps: Props) {
+  // To be updated, see https://reactjs.org/docs/react-component.html#unsafe_componentwillreceiveprops.
+  UNSAFE_componentWillReceiveProps(newProps: Props) {
     if (
       (!this.props.open && newProps.open) ||
       (newProps.open && this.props.object !== newProps.object)
@@ -267,6 +370,7 @@ export default class ObjectEditorDialog extends Component<Props, State> {
     if (!object) return;
 
     const editorConfiguration = ObjectsEditorService.getEditorConfiguration(
+      this.props.project,
       object.getType()
     );
     if (!editorConfiguration) {
@@ -296,10 +400,23 @@ export default class ObjectEditorDialog extends Component<Props, State> {
         editorComponent={editorComponent}
         key={this.props.object && this.props.object.ptr}
         helpPagePath={helpPagePath}
-        object={castToObjectType(object)}
+        object={object}
         objectName={this.state.objectName}
         initialTab={initialTab}
       />
     );
   }
 }
+
+const ObjectEditorWithErrorBoundary = (props: Props) => (
+  <ErrorBoundary
+    componentTitle={<Trans>Object editor</Trans>}
+    scope="object-details"
+    onClose={props.onCancel}
+    showOnTop
+  >
+    <ObjectEditorDialog {...props} />
+  </ErrorBoundary>
+);
+
+export default ObjectEditorWithErrorBoundary;

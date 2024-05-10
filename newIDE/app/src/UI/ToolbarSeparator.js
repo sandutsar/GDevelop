@@ -1,8 +1,8 @@
 // @flow
 import React from 'react';
-import GDevelopThemeContext from '../UI/Theme/ThemeContext';
+import GDevelopThemeContext from '../UI/Theme/GDevelopThemeContext';
 
-export default () => {
+const ToolbarSeparator = () => {
   const theme = React.useContext(GDevelopThemeContext);
   return (
     <span
@@ -17,3 +17,5 @@ export default () => {
     />
   );
 };
+
+export default ToolbarSeparator;

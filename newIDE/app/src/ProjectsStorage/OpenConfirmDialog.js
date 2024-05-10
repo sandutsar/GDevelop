@@ -1,9 +1,8 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import * as React from 'react';
-import Dialog from '../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import FlatButton from '../UI/FlatButton';
-import RaisedButton from '../UI/RaisedButton';
 import BackgroundText from '../UI/BackgroundText';
 import { Column, Line } from '../UI/Grid';
 import Text from '../UI/Text';
@@ -21,7 +20,6 @@ export const OpenConfirmDialog = ({
   return (
     <Dialog
       title={<Trans>Confirm the opening</Trans>}
-      onApply={onConfirm}
       actions={[
         <FlatButton
           label={<Trans>Cancel</Trans>}
@@ -29,19 +27,20 @@ export const OpenConfirmDialog = ({
           primary={false}
           onClick={onClose}
         />,
-        <RaisedButton
+        <DialogPrimaryButton
           label={<Trans>Open the project</Trans>}
           key="open-project"
           primary
           onClick={onConfirm}
         />,
       ]}
-      cannotBeDismissed={true}
+      onRequestClose={onClose}
+      onApply={onConfirm}
       open
       maxWidth="sm"
     >
       <Line>
-        <Column>
+        <Column noMargin>
           <Text>
             <Trans>
               You're about to open (or re-open) a project. Click on "Open the
@@ -51,7 +50,7 @@ export const OpenConfirmDialog = ({
         </Column>
       </Line>
       <Line>
-        <Column>
+        <Column noMargin>
           <BackgroundText>
             <Trans>
               If you have a popup blocker interrupting the opening, allow the

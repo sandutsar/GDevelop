@@ -1,58 +1,61 @@
 // @flow
 import * as React from 'react';
 import { Trans } from '@lingui/macro';
-import { makeStyles } from '@material-ui/core';
-import Chip from '@material-ui/core/Chip';
-import FaceIcon from '@material-ui/icons/Face';
 import Avatar from '@material-ui/core/Avatar';
-import { type Profile } from '../../Utils/GDevelopServices/Authentication';
 import { getGravatarUrl } from '../GravatarUrl';
-import DotBadge from '../DotBadge';
+import RaisedButton from '../RaisedButton';
+import { shortenString } from '../../Utils/StringHelpers';
+import TextButton from '../TextButton';
+import { LineStackLayout } from '../Layout';
+import AuthenticatedUserContext from '../../Profile/AuthenticatedUserContext';
+import CircularProgress from '../CircularProgress';
+import User from '../CustomSvgIcons/User';
+
+const styles = {
+  avatar: {
+    width: 20,
+    height: 20,
+  },
+  buttonContainer: { flexShrink: 0 },
+};
 
 type Props = {|
-  profile: ?Profile,
-  onClick: () => void,
-  displayNotificationBadge: boolean,
+  onOpenProfile: () => void,
 |};
 
-const useStyles = makeStyles({
-  root: { flexDirection: 'column' },
-  anchorOriginTopRightCircle: {
-    top: 5,
-    right: 5,
-  },
-});
+const UserChip = ({ onOpenProfile }: Props) => {
+  const authenticatedUser = React.useContext(AuthenticatedUserContext);
+  const { profile, onOpenCreateAccountDialog, loginState } = authenticatedUser;
 
-const UserChip = ({ profile, onClick, displayNotificationBadge }: Props) => {
-  const classes = useStyles();
-  return (
-    <DotBadge
-      overlap="circle"
-      invisible={!displayNotificationBadge}
-      classes={classes}
-    >
-      <Chip
-        variant="outlined"
-        avatar={
-          profile ? (
-            <Avatar
-              src={getGravatarUrl(profile.email || '', { size: 30 })}
-              sx={{ width: 30, height: 30 }}
-            />
-          ) : (
-            <FaceIcon />
-          )
-        }
-        label={
-          profile ? (
-            profile.username || profile.email
-          ) : (
-            <Trans>Click to connect</Trans>
-          )
-        }
-        onClick={onClick}
-      />
-    </DotBadge>
+  return !profile && loginState === 'loggingIn' ? (
+    <CircularProgress size={25} />
+  ) : profile ? (
+    <TextButton
+      label={shortenString(profile.username || profile.email, 20)}
+      onClick={onOpenProfile}
+      allowBrowserAutoTranslate={false}
+      icon={
+        <Avatar
+          src={getGravatarUrl(profile.email || '', { size: 50 })}
+          style={styles.avatar}
+        />
+      }
+    />
+  ) : (
+    <div style={styles.buttonContainer}>
+      <LineStackLayout noMargin alignItems="center">
+        <RaisedButton
+          label={
+            <span>
+              <Trans>Create account</Trans>
+            </span>
+          }
+          onClick={onOpenCreateAccountDialog}
+          primary
+          icon={<User fontSize="small" />}
+        />
+      </LineStackLayout>
+    </div>
   );
 };
 

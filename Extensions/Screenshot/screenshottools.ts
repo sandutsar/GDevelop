@@ -4,17 +4,16 @@ namespace gdjs {
 
     /**
      * Save a screenshot of the game.
-     * @param runtimeScene The scene
+     * @param instanceContainer The container
      * @param savePath The path where to save the screenshot
      */
     export const takeScreenshot = function (
-      runtimeScene: gdjs.RuntimeScene,
+      instanceContainer: gdjs.RuntimeInstanceContainer,
       savePath: string
     ) {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        const fileSystem = electron.remote.require('fs');
-        const canvas = runtimeScene.getGame().getRenderer().getCanvas();
+      const fs = typeof require !== 'undefined' ? require('fs') : null;
+      if (fs) {
+        const canvas = instanceContainer.getGame().getRenderer().getCanvas();
         if (canvas) {
           const content = canvas
             .toDataURL('image/png')
@@ -22,7 +21,7 @@ namespace gdjs {
           if (savePath.toLowerCase().indexOf('.png') == -1) {
             savePath += '.png';
           }
-          fileSystem.writeFile(savePath, content, 'base64', (err) => {
+          fs.writeFile(savePath, content, 'base64', (err) => {
             if (err) {
               logger.error(
                 'Unable to save the screenshot at path: ' + savePath

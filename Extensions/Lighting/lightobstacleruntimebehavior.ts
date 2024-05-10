@@ -4,26 +4,26 @@ namespace gdjs {
   export class LightObstaclesManager {
     _obstacleRBush: any;
 
-    constructor(runtimeScene: gdjs.RuntimeScene) {
+    constructor(instanceContainer: gdjs.RuntimeInstanceContainer) {
       this._obstacleRBush = new rbush();
     }
 
     /**
-     * Get the light obstacles manager of a scene.
+     * Get the light obstacles manager of an instance container.
      */
     static getManager(
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): gdjs.LightObstaclesManager {
       // @ts-ignore
-      if (!runtimeScene._lightObstaclesManager) {
+      if (!instanceContainer._lightObstaclesManager) {
         // Create the shared manager if necessary.
         // @ts-ignore
-        runtimeScene._lightObstaclesManager = new gdjs.LightObstaclesManager(
-          runtimeScene
+        instanceContainer._lightObstaclesManager = new gdjs.LightObstaclesManager(
+          instanceContainer
         );
       }
       // @ts-ignore
-      return runtimeScene._lightObstaclesManager;
+      return instanceContainer._lightObstaclesManager;
     }
 
     /**
@@ -53,8 +53,8 @@ namespace gdjs {
     getAllObstaclesAround(
       object: gdjs.RuntimeObject,
       radius: number,
-      result: gdjs.BehaviorRBushAABB<gdjs.LightObstacleRuntimeBehavior>[]
-    ) {
+      result: gdjs.LightObstacleRuntimeBehavior[]
+    ): void {
       // TODO: This would better be done using the object AABB (getAABB), as (`getCenterX`;`getCenterY`) point
       // is not necessarily in the middle of the object (for sprites for example).
       const x = object.getX();
@@ -70,9 +70,13 @@ namespace gdjs {
       searchArea.maxX = x + radius;
       // @ts-ignore
       searchArea.maxY = y + radius;
-      const nearbyObstacles = this._obstacleRBush.search(searchArea);
+      const nearbyObstacles: gdjs.BehaviorRBushAABB<
+        gdjs.LightObstacleRuntimeBehavior
+      >[] = this._obstacleRBush.search(searchArea);
       result.length = 0;
-      result.push.apply(result, nearbyObstacles);
+      nearbyObstacles.forEach((nearbyObstacle) =>
+        result.push(nearbyObstacle.behavior)
+      );
     }
   }
 
@@ -88,15 +92,15 @@ namespace gdjs {
     _registeredInManager: boolean = false;
 
     constructor(
-      runtimeScene: gdjs.RuntimeScene,
+      instanceContainer: gdjs.RuntimeInstanceContainer,
       behaviorData,
       owner: gdjs.RuntimeObject
     ) {
-      super(runtimeScene, behaviorData, owner);
-      this._manager = LightObstaclesManager.getManager(runtimeScene);
+      super(instanceContainer, behaviorData, owner);
+      this._manager = LightObstaclesManager.getManager(instanceContainer);
     }
 
-    doStepPreEvents(runtimeScene: gdjs.RuntimeScene) {
+    doStepPreEvents(instanceContainer: gdjs.RuntimeInstanceContainer) {
       // Make sure the obstacle is or is not in the obstacles manager.
       if (!this.activated() && this._registeredInManager) {
         this._manager.removeObstacle(this);

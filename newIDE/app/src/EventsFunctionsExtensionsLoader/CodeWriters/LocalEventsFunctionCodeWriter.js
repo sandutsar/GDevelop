@@ -3,8 +3,8 @@ import {
   type EventsFunctionCodeWriter,
   type EventsFunctionCodeWriterCallbacks,
 } from '..';
-import optionalRequire from '../../Utils/OptionalRequire.js';
-import { getUID } from '../../Utils/LocalUserInfo.js';
+import optionalRequire from '../../Utils/OptionalRequire';
+import { getUID } from '../../Utils/LocalUserInfo';
 import slugs from 'slugs';
 const path = optionalRequire('path');
 const os = optionalRequire('os');
@@ -59,6 +59,20 @@ export const makeLocalEventsFunctionCodeWriter = ({
     ): Promise<void> => {
       return new Promise((resolve, reject) => {
         const includeFile = getPathFor(behaviorCodeNamespace);
+        onWriteFile({ includeFile, content: code });
+        fs.writeFile(includeFile, code, err => {
+          if (err) return reject(err);
+
+          resolve();
+        });
+      });
+    },
+    writeObjectCode: (
+      objectCodeNamespace: string,
+      code: string
+    ): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const includeFile = getPathFor(objectCodeNamespace);
         onWriteFile({ includeFile, content: code });
         fs.writeFile(includeFile, code, err => {
           if (err) return reject(err);

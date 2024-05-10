@@ -1,12 +1,16 @@
 // @flow
 import {
-  enumerateAllInstructions,
-  getObjectParameterIndex,
   enumerateObjectAndBehaviorsInstructions,
   enumerateFreeInstructions,
 } from './EnumerateInstructions';
 import { setupInstructionParameters } from './SetupInstructionParameters';
 const gd: libGDevelop = global.gd;
+
+// $FlowExpectedError
+const makeFakeI18n = (fakeI18n): I18nType => ({
+  ...fakeI18n,
+  _: message => message.id,
+});
 
 describe('setupInstructionParameters', () => {
   it('sets the proper number of parameters', () => {
@@ -16,7 +20,10 @@ describe('setupInstructionParameters', () => {
     layout.insertNewObject(project, 'Sprite', objectName, 0);
 
     // Simulate that we select an instruction
-    const enumeratedInstructions = enumerateFreeInstructions(false);
+    const enumeratedInstructions = enumerateFreeInstructions(
+      false,
+      makeFakeI18n()
+    );
     const playMusicInstruction = enumeratedInstructions.find(
       enumeratedInstruction => enumeratedInstruction.type === 'PlayMusic'
     );
@@ -35,17 +42,18 @@ describe('setupInstructionParameters', () => {
 
     // Check that parameters were created
     expect(instruction.getParametersCount()).toBe(5);
-    expect(instruction.getParameter(0)).toBe('');
-    expect(instruction.getParameter(1)).toBe('');
-    expect(instruction.getParameter(2)).toBe('');
-    expect(instruction.getParameter(3)).toBe('');
-    expect(instruction.getParameter(4)).toBe('');
+    expect(instruction.getParameter(0).getPlainString()).toBe('');
+    expect(instruction.getParameter(1).getPlainString()).toBe('');
+    expect(instruction.getParameter(2).getPlainString()).toBe('');
+    expect(instruction.getParameter(3).getPlainString()).toBe('');
+    expect(instruction.getParameter(4).getPlainString()).toBe('');
   });
 
   it('sets the proper number of parameters and the object name', () => {
     const project = new gd.ProjectHelper.createNewGDJSProject();
     const layout = project.insertNewLayout('Scene', 0);
     const objectName = 'MySpriteObject';
+    const behaviorName = 'Animation';
     layout.insertNewObject(project, 'Sprite', objectName, 0);
 
     // Simulate that we select an instruction for the object
@@ -53,10 +61,13 @@ describe('setupInstructionParameters', () => {
       false,
       project,
       layout,
-      objectName
+      objectName,
+      makeFakeI18n()
     );
     const setAnimationNameInstruction = enumeratedInstructions.find(
-      enumeratedInstruction => enumeratedInstruction.type === 'SetAnimationName'
+      enumeratedInstruction =>
+        enumeratedInstruction.type ===
+        'AnimatableCapability::AnimatableBehavior::SetName'
     );
 
     if (!setAnimationNameInstruction) {
@@ -73,9 +84,13 @@ describe('setupInstructionParameters', () => {
     );
 
     // Check that parameters were created and the object name set
-    expect(instruction.getParametersCount()).toBe(2);
-    expect(instruction.getParameter(0)).toBe(objectName);
-    expect(instruction.getParameter(1)).toBe('');
+    expect(instruction.getParametersCount()).toBe(4);
+    expect(instruction.getParameter(0).getPlainString()).toBe(objectName);
+    expect(instruction.getParameter(1).getPlainString()).toBe(behaviorName);
+    // Operator
+    expect(instruction.getParameter(2).getPlainString()).toBe('');
+    // Operand
+    expect(instruction.getParameter(3).getPlainString()).toBe('');
   });
 
   it('sets the proper parameters for a behavior', () => {
@@ -94,7 +109,8 @@ describe('setupInstructionParameters', () => {
       false,
       project,
       layout,
-      objectName
+      objectName,
+      makeFakeI18n()
     );
     const jumpSpeedInstruction = enumeratedInstructions.find(
       enumeratedInstruction =>
@@ -116,10 +132,12 @@ describe('setupInstructionParameters', () => {
 
     // Check that parameters were created, the object name and behavior set
     expect(instruction.getParametersCount()).toBe(4);
-    expect(instruction.getParameter(0)).toBe(objectName);
-    expect(instruction.getParameter(1)).toBe('PlatformerObject');
-    expect(instruction.getParameter(2)).toBe(''); // In the future, this could be set to a default value.
-    expect(instruction.getParameter(3)).toBe('');
+    expect(instruction.getParameter(0).getPlainString()).toBe(objectName);
+    expect(instruction.getParameter(1).getPlainString()).toBe(
+      'PlatformerObject'
+    );
+    expect(instruction.getParameter(2).getPlainString()).toBe(''); // In the future, this could be set to a default value.
+    expect(instruction.getParameter(3).getPlainString()).toBe('');
   });
 
   it('sets the proper parameters for a behavior, selecting the first behavior if multiple', () => {
@@ -143,7 +161,8 @@ describe('setupInstructionParameters', () => {
       false,
       project,
       layout,
-      objectName
+      objectName,
+      makeFakeI18n()
     );
     const jumpSpeedInstruction = enumeratedInstructions.find(
       enumeratedInstruction =>
@@ -165,8 +184,10 @@ describe('setupInstructionParameters', () => {
 
     // Check that parameters were created, the object name and behavior set
     expect(instruction.getParametersCount()).toBe(4);
-    expect(instruction.getParameter(0)).toBe(objectName);
-    expect(instruction.getParameter(1)).toBe('FirstPlatformerObject');
+    expect(instruction.getParameter(0).getPlainString()).toBe(objectName);
+    expect(instruction.getParameter(1).getPlainString()).toBe(
+      'FirstPlatformerObject'
+    );
   });
 
   it('sets the proper parameters for a behavior, changing it if a wrong behavior name is entered', () => {
@@ -190,7 +211,8 @@ describe('setupInstructionParameters', () => {
       false,
       project,
       layout,
-      objectName
+      objectName,
+      makeFakeI18n()
     );
     const jumpSpeedInstruction = enumeratedInstructions.find(
       enumeratedInstruction =>
@@ -215,8 +237,10 @@ describe('setupInstructionParameters', () => {
 
     // Check that parameters were created, the object name and behavior set
     expect(instruction.getParametersCount()).toBe(4);
-    expect(instruction.getParameter(0)).toBe(objectName);
-    expect(instruction.getParameter(1)).toBe('FirstPlatformerObject');
+    expect(instruction.getParameter(0).getPlainString()).toBe(objectName);
+    expect(instruction.getParameter(1).getPlainString()).toBe(
+      'FirstPlatformerObject'
+    );
   });
 
   it('sets the proper parameters for a behavior, letting an existing behavior name if it is valid', () => {
@@ -240,7 +264,8 @@ describe('setupInstructionParameters', () => {
       false,
       project,
       layout,
-      objectName
+      objectName,
+      makeFakeI18n()
     );
     const jumpSpeedInstruction = enumeratedInstructions.find(
       enumeratedInstruction =>
@@ -265,7 +290,9 @@ describe('setupInstructionParameters', () => {
 
     // Check that parameters were created, the object name and behavior set
     expect(instruction.getParametersCount()).toBe(4);
-    expect(instruction.getParameter(0)).toBe(objectName);
-    expect(instruction.getParameter(1)).toBe('OtherPlatformerObject');
+    expect(instruction.getParameter(0).getPlainString()).toBe(objectName);
+    expect(instruction.getParameter(1).getPlainString()).toBe(
+      'OtherPlatformerObject'
+    );
   });
 });

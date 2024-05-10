@@ -1,6 +1,7 @@
 // @flow
 import * as React from 'react';
 import Button from '@material-ui/core/Button';
+import { type ButtonInterface } from './Button';
 import { Spacer } from './Grid';
 
 // We support a subset of the props supported by Material-UI v0.x RaisedButton
@@ -9,6 +10,7 @@ export type RaisedButtonPropsWithoutOnClick = {|
   label?: React.Node,
   primary?: boolean,
   disabled?: boolean,
+  keyboardFocused?: boolean,
   fullWidth?: boolean,
   icon?: React.Node,
   style?: {|
@@ -19,9 +21,10 @@ export type RaisedButtonPropsWithoutOnClick = {|
     margin?: number,
     flexShrink?: 0,
   |},
+  id?: ?string,
 |};
 
-type Props = {|
+export type RaisedButtonProps = {|
   ...RaisedButtonPropsWithoutOnClick,
   onClick: ?() => void | Promise<void>,
 |};
@@ -29,10 +32,19 @@ type Props = {|
 /**
  * A raised button based on Material-UI button.
  */
-export default class RaisedButton extends React.Component<Props, {||}> {
-  render() {
-    const { label, primary, icon, ...otherProps } = this.props;
-
+const RaisedButton = React.forwardRef<RaisedButtonProps, ButtonInterface>(
+  (
+    {
+      label,
+      primary,
+      icon,
+      disabled,
+      keyboardFocused,
+      style,
+      ...otherProps
+    }: RaisedButtonProps,
+    ref
+  ) => {
     // In theory, focus ripple is only shown after a keyboard interaction
     // (see https://github.com/mui-org/material-ui/issues/12067). However, as
     // it's important to get focus right in the whole app, make the ripple
@@ -43,14 +55,31 @@ export default class RaisedButton extends React.Component<Props, {||}> {
       <Button
         variant="contained"
         size="small"
+        disableElevation
         color={primary ? 'primary' : 'default'}
+        autoFocus={keyboardFocused}
         focusRipple={focusRipple}
+        disabled={disabled}
+        style={
+          style || !label
+            ? {
+                // If no label is specified, reduce the min width so that the button
+                // is just around the icon.
+                minWidth: !label ? 0 : undefined,
+                ...style,
+              }
+            : undefined
+        }
         {...otherProps}
+        ref={ref}
       >
         {icon}
-        {icon && <Spacer />}
-        {label}
+        {!!icon && !!label && <Spacer />}
+        {/* span element is required to prevent browser auto translators to crash the app - See https://github.com/4ian/GDevelop/issues/3453 */}
+        {label ? <span>{label}</span> : null}
       </Button>
     );
   }
-}
+);
+
+export default RaisedButton;

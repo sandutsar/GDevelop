@@ -28,7 +28,16 @@ namespace gdjs {
         errorVar: gdjs.Variable
       ) {
         const onError = (err) => {
-          errorVar.setString('' + err);
+          if (
+            err instanceof ProgressEvent &&
+            err.currentTarget &&
+            err.currentTarget instanceof XMLHttpRequest &&
+            err.currentTarget.status === 0
+          ) {
+            errorVar.setString('REQUEST_NOT_SENT');
+          } else {
+            errorVar.setString('' + err);
+          }
         };
         try {
           const request = new XMLHttpRequest();
@@ -55,6 +64,37 @@ namespace gdjs {
         } catch (err) {
           onError(err);
         }
+      };
+
+      export const sendAwaitableAsyncRequest = (
+        url: string,
+        body: string,
+        method: string,
+        contentType: string,
+        responseVar: gdjs.Variable,
+        errorVar: gdjs.Variable
+      ) => {
+        return new gdjs.PromiseTask(
+          fetch(url, {
+            body: method !== 'GET' ? body : undefined,
+            method,
+            headers: {
+              'Content-Type':
+                contentType || 'application/x-www-form-urlencoded',
+            },
+          }).then(
+            async (response) => {
+              const result = await response.text();
+              if (response.status >= 400) {
+                errorVar.setString('' + response.status);
+              }
+              responseVar.setString(result);
+            },
+            (error) => {
+              errorVar.setString('' + error);
+            }
+          )
+        );
       };
 
       /**
@@ -105,10 +145,10 @@ namespace gdjs {
       };
 
       export const enableMetrics = function (
-        runtimeScene: gdjs.RuntimeScene,
+        instanceContainer: gdjs.RuntimeInstanceContainer,
         enable: boolean
       ) {
-        runtimeScene.getGame().enableMetrics(enable);
+        instanceContainer.getGame().enableMetrics(enable);
       };
 
       /**
@@ -128,7 +168,7 @@ namespace gdjs {
        * @deprecated Use `JSON.stringify(variable.toJSObject())` instead.
        */
       export const objectVariableStructureToJSON = function (
-        object: gdjs.RuntimeObject,
+        object: gdjs.RuntimeObject | null,
         variable: gdjs.Variable
       ): string {
         return JSON.stringify(variable.toJSObject());
@@ -165,7 +205,7 @@ namespace gdjs {
        */
       export const jsonToObjectVariableStructure = function (
         jsonStr: string,
-        object: gdjs.RuntimeObject,
+        object: gdjs.RuntimeObject | null,
         variable: gdjs.Variable
       ) {
         variable.fromJSON(jsonStr);

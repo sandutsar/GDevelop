@@ -1,8 +1,6 @@
 // @flow
 import * as React from 'react';
 import classNames from 'classnames';
-import ExpandMore from '@material-ui/icons/ExpandMore';
-import ExpandLess from '@material-ui/icons/ExpandLess';
 import Button from '@material-ui/core/Button';
 import InlinePopover from '../../InlinePopover';
 import ObjectField from '../../ParameterFields/ObjectField';
@@ -16,7 +14,10 @@ import { type EventRendererProps } from './EventRenderer';
 import Measure from 'react-measure';
 import { CodeEditor } from '../../../CodeEditor';
 import { shouldActivate } from '../../../UI/KeyboardShortcuts/InteractionKeys';
+import { type ParameterFieldInterface } from '../../ParameterFields/ParameterFieldCommons';
 import { Trans } from '@lingui/macro';
+import ChevronArrowTop from '../../../UI/CustomSvgIcons/ChevronArrowTop';
+import ChevronArrowBottom from '../../../UI/CustomSvgIcons/ChevronArrowBottom';
 const gd: libGDevelop = global.gd;
 
 const fontFamily = '"Lucida Console", Monaco, monospace';
@@ -42,6 +43,9 @@ const styles = {
     color: '#d4d4d4',
     overflowX: 'hidden',
     maxWidth: '100%',
+    whiteSpace: 'normal',
+    wordBreak: 'normal',
+    overflowWrap: 'anywhere',
   },
   comment: {
     color: '#777',
@@ -66,7 +70,7 @@ export default class JsCodeEvent extends React.Component<
   EventRendererProps,
   State
 > {
-  _objectField: ?ObjectField = null;
+  _objectField: ?ParameterFieldInterface = null;
   state = {
     editingObject: false,
     editingPreviousValue: null,
@@ -74,6 +78,19 @@ export default class JsCodeEvent extends React.Component<
   };
 
   _input: ?any;
+  _inlineCodeBeforeChanges: ?string;
+
+  onFocus = () => {
+    const jsCodeEvent = gd.asJsCodeEvent(this.props.event);
+    this._inlineCodeBeforeChanges = jsCodeEvent.getInlineCode();
+  };
+
+  onBlur = () => {
+    const jsCodeEvent = gd.asJsCodeEvent(this.props.event);
+    const inlineCodeAfterChanges = jsCodeEvent.getInlineCode();
+    if (this._inlineCodeBeforeChanges !== inlineCodeAfterChanges)
+      this.props.onEndEditingEvent();
+  };
 
   onChange = (newValue: string) => {
     const jsCodeEvent = gd.asJsCodeEvent(this.props.event);
@@ -125,7 +142,11 @@ export default class JsCodeEvent extends React.Component<
     // Put back the focus after closing the inline popover.
     // $FlowFixMe
     if (anchorEl) anchorEl.focus();
-
+    const jsCodeEvent = gd.asJsCodeEvent(this.props.event);
+    const { editingPreviousValue } = this.state;
+    if (editingPreviousValue !== jsCodeEvent.getParameterObjects()) {
+      this.props.onEndEditingEvent();
+    }
     this.setState({
       editingObject: false,
       editingPreviousValue: null,
@@ -225,9 +246,9 @@ export default class JsCodeEvent extends React.Component<
     const expandIcon = (
       <div style={styles.expandIcon}>
         {jsCodeEvent.isEventsSheetExpanded() ? (
-          <ExpandLess fontSize="small" color="inherit" />
+          <ChevronArrowTop fontSize="small" color="inherit" />
         ) : (
-          <ExpandMore fontSize="small" color="inherit" />
+          <ChevronArrowBottom fontSize="small" color="inherit" />
         )}
       </div>
     );
@@ -242,6 +263,7 @@ export default class JsCodeEvent extends React.Component<
               [largeSelectedArea]: this.props.selected,
             })}
             ref={measureRef}
+            id={`${this.props.idPrefix}-js-code`}
           >
             {functionStart}
             <CodeEditor
@@ -249,7 +271,11 @@ export default class JsCodeEvent extends React.Component<
               onChange={this.onChange}
               width={contentRect.bounds.width - 5}
               height={this._getCodeEditorHeight()}
-              onEditorMounted={() => this.props.onUpdate()}
+              onEditorMounted={() => {
+                this.props.onUpdate();
+              }}
+              onFocus={this.onFocus}
+              onBlur={this.onBlur}
             />
             {functionEnd}
             <Button onClick={this.toggleExpanded} fullWidth size="small">

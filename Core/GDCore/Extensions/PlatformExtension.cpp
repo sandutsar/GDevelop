@@ -18,19 +18,18 @@
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/IDE/PlatformManager.h"
 #include "GDCore/Project/Behavior.h"
+#include "GDCore/Project/ObjectConfiguration.h"
 #include "GDCore/Project/BehaviorsSharedData.h"
 #include "GDCore/Tools/Localization.h"
 
 namespace gd {
 
-#if defined(GD_IDE_ONLY)
 std::map<gd::String, gd::InstructionMetadata>
     PlatformExtension::badConditionsMetadata;
 std::map<gd::String, gd::InstructionMetadata>
     PlatformExtension::badActionsMetadata;
 std::map<gd::String, gd::ExpressionMetadata>
     PlatformExtension::badExpressionsMetadata;
-#endif
 
 gd::InstructionMetadata& PlatformExtension::AddCondition(
     const gd::String& name,
@@ -40,7 +39,6 @@ gd::InstructionMetadata& PlatformExtension::AddCondition(
     const gd::String& group,
     const gd::String& icon,
     const gd::String& smallicon) {
-#if defined(GD_IDE_ONLY)
   gd::String nameWithNamespace = GetNameSpace() + name;
   conditionsInfos[nameWithNamespace] = InstructionMetadata(GetNameSpace(),
                                                            nameWithNamespace,
@@ -52,7 +50,6 @@ gd::InstructionMetadata& PlatformExtension::AddCondition(
                                                            smallicon)
                                            .SetHelpPath(GetHelpPath());
   return conditionsInfos[nameWithNamespace];
-#endif
 }
 
 gd::InstructionMetadata& PlatformExtension::AddAction(
@@ -63,7 +60,6 @@ gd::InstructionMetadata& PlatformExtension::AddAction(
     const gd::String& group,
     const gd::String& icon,
     const gd::String& smallicon) {
-#if defined(GD_IDE_ONLY)
   gd::String nameWithNamespace = GetNameSpace() + name;
   actionsInfos[nameWithNamespace] = InstructionMetadata(GetNameSpace(),
                                                         nameWithNamespace,
@@ -75,7 +71,6 @@ gd::InstructionMetadata& PlatformExtension::AddAction(
                                                         smallicon)
                                         .SetHelpPath(GetHelpPath());
   return actionsInfos[nameWithNamespace];
-#endif
 }
 
 gd::ExpressionMetadata& PlatformExtension::AddExpression(
@@ -84,7 +79,6 @@ gd::ExpressionMetadata& PlatformExtension::AddExpression(
     const gd::String& description,
     const gd::String& group,
     const gd::String& smallicon) {
-#if defined(GD_IDE_ONLY)
   gd::String nameWithNamespace = GetNameSpace() + name;
   expressionsInfos[nameWithNamespace] = ExpressionMetadata("number",
                                                            GetNameSpace(),
@@ -95,7 +89,6 @@ gd::ExpressionMetadata& PlatformExtension::AddExpression(
                                                            smallicon)
                                             .SetHelpPath(GetHelpPath());
   return expressionsInfos[nameWithNamespace];
-#endif
 }
 
 gd::ExpressionMetadata& PlatformExtension::AddStrExpression(
@@ -104,7 +97,6 @@ gd::ExpressionMetadata& PlatformExtension::AddStrExpression(
     const gd::String& description,
     const gd::String& group,
     const gd::String& smallicon) {
-#if defined(GD_IDE_ONLY)
   gd::String nameWithNamespace = GetNameSpace() + name;
   strExpressionsInfos[nameWithNamespace] = ExpressionMetadata("string",
                                                               GetNameSpace(),
@@ -115,7 +107,6 @@ gd::ExpressionMetadata& PlatformExtension::AddStrExpression(
                                                               smallicon)
                                                .SetHelpPath(GetHelpPath());
   return strExpressionsInfos[nameWithNamespace];
-#endif
 }
 
 gd::MultipleInstructionMetadata PlatformExtension::AddExpressionAndCondition(
@@ -165,6 +156,40 @@ PlatformExtension::AddExpressionAndConditionAndAction(
     const gd::String& sentenceName,
     const gd::String& group,
     const gd::String& icon) {
+  if (type != "number" && type != "string" && type != "boolean") {
+    gd::LogError(
+        "Unrecognised type passed to AddExpressionAndConditionAndAction: " +
+        type + ". Verify this type is valid and supported.");
+  }
+
+  gd::String conditionDescriptionTemplate =
+      type == "boolean" ? _("Check if <subject>.") : _("Compare <subject>.");
+  auto& condition = AddCondition(name,
+                                 fullname,
+                                 conditionDescriptionTemplate.FindAndReplace(
+                                     "<subject>", descriptionSubject),
+                                 sentenceName,
+                                 group,
+                                 icon,
+                                 icon);
+
+  gd::String actionDescriptionTemplate = type == "boolean"
+                                             ? _("Set (or unset) if <subject>.")
+                                             : _("Change <subject>.");
+  auto& action = AddAction(
+      "Set" + name,
+      fullname,
+      actionDescriptionTemplate.FindAndReplace("<subject>", descriptionSubject),
+      sentenceName,
+      group,
+      icon,
+      icon);
+
+  if (type == "boolean") {
+    return MultipleInstructionMetadata::WithConditionAndAction(condition,
+                                                               action);
+  }
+
   gd::String expressionDescriptionTemplate = _("Return <subject>.");
   auto& expression =
       type == "number"
@@ -175,50 +200,27 @@ PlatformExtension::AddExpressionAndConditionAndAction(
                           group,
                           icon)
           : AddStrExpression(name,
-                             fullname,
-                             expressionDescriptionTemplate.FindAndReplace(
-                                 "<subject>", descriptionSubject),
-                             group,
-                             icon);
-
-  gd::String conditionDescriptionTemplate = _("Compare <subject>.");
-  auto& condition = AddCondition(name,
-                                 fullname,
-                                 conditionDescriptionTemplate.FindAndReplace(
-                                     "<subject>", descriptionSubject),
-                                 sentenceName,
-                                 group,
-                                 icon,
-                                 icon);
-
-  // TODO: update the checks
-  gd::String actionDescriptionTemplate = _("Change <subject>.");
-  auto& action = AddAction(
-      "Set" + name,
-      fullname,
-      actionDescriptionTemplate.FindAndReplace("<subject>", descriptionSubject),
-      sentenceName,
-      group,
-      icon,
-      icon);
+                              fullname,
+                              expressionDescriptionTemplate.FindAndReplace(
+                                  "<subject>", descriptionSubject),
+                              group,
+                              icon);
 
   return MultipleInstructionMetadata::WithExpressionAndConditionAndAction(
       expression, condition, action);
 }
 
-#if defined(GD_IDE_ONLY)
 gd::DependencyMetadata& PlatformExtension::AddDependency() {
   extensionDependenciesMetadata.push_back(DependencyMetadata());
   return extensionDependenciesMetadata.back();
 }
-#endif
 
 gd::ObjectMetadata& PlatformExtension::AddObject(
     const gd::String& name,
     const gd::String& fullname,
     const gd::String& description,
     const gd::String& icon24x24,
-    std::shared_ptr<gd::Object> instance) {
+    std::shared_ptr<gd::ObjectConfiguration> instance) {
   gd::String nameWithNamespace = GetNameSpace() + name;
   objectsInfos[nameWithNamespace] = ObjectMetadata(GetNameSpace(),
                                                    nameWithNamespace,
@@ -228,6 +230,21 @@ gd::ObjectMetadata& PlatformExtension::AddObject(
                                                    instance)
                                         .SetHelpPath(GetHelpPath());
 
+  return objectsInfos[nameWithNamespace];
+}
+
+gd::ObjectMetadata& PlatformExtension::AddEventsBasedObject(
+    const gd::String& name,
+    const gd::String& fullname,
+    const gd::String& description,
+    const gd::String& icon24x24) {
+  gd::String nameWithNamespace = GetNameSpace() + name;
+  objectsInfos[nameWithNamespace] = ObjectMetadata(GetNameSpace(),
+                                                   nameWithNamespace,
+                                                   fullname,
+                                                   description,
+                                                   icon24x24)
+                                        .SetHelpPath(GetHelpPath());
   return objectsInfos[nameWithNamespace];
 }
 
@@ -269,7 +286,6 @@ gd::EventMetadata& PlatformExtension::AddEvent(
     const gd::String& group_,
     const gd::String& smallicon_,
     std::shared_ptr<gd::BaseEvent> instance_) {
-#if defined(GD_IDE_ONLY)
   gd::String nameWithNamespace = GetNameSpace() + name_;
   eventsInfos[nameWithNamespace] = gd::EventMetadata(nameWithNamespace,
                                                      fullname_,
@@ -278,7 +294,6 @@ gd::EventMetadata& PlatformExtension::AddEvent(
                                                      smallicon_,
                                                      instance_);
   return eventsInfos[nameWithNamespace];
-#endif
 }
 
 PlatformExtension& PlatformExtension::SetExtensionInformation(
@@ -333,6 +348,11 @@ gd::BehaviorMetadata& PlatformExtension::GetBehaviorMetadata(
   return badBehaviorMetadata;
 }
 
+bool PlatformExtension::HasBehavior(
+    const gd::String& behaviorType) const {
+  return behaviorsInfo.find(behaviorType) != behaviorsInfo.end();
+}
+
 gd::EffectMetadata& PlatformExtension::GetEffectMetadata(
     const gd::String& effectName) {
   if (effectsMetadata.find(effectName) != effectsMetadata.end())
@@ -353,8 +373,6 @@ std::vector<gd::String> PlatformExtension::GetBehaviorsTypes() const {
   return behaviors;
 }
 
-#if defined(GD_IDE_ONLY)
-
 gd::InstructionMetadata& PlatformExtension::AddDuplicatedAction(
     const gd::String& newActionName, const gd::String& copiedActionName) {
   gd::String newNameWithNamespace = GetNameSpace() + newActionName;
@@ -362,7 +380,7 @@ gd::InstructionMetadata& PlatformExtension::AddDuplicatedAction(
 
   auto copiedAction = actionsInfos.find(copiedNameWithNamespace);
   if (copiedAction == actionsInfos.end()) {
-    gd::LogWarning("Could not find an action with name " +
+    gd::LogError("Could not find an action with name " +
                    copiedNameWithNamespace + " to copy.");
   } else {
     actionsInfos[newNameWithNamespace] = copiedAction->second;
@@ -372,13 +390,17 @@ gd::InstructionMetadata& PlatformExtension::AddDuplicatedAction(
 }
 
 gd::InstructionMetadata& PlatformExtension::AddDuplicatedCondition(
-    const gd::String& newConditionName, const gd::String& copiedConditionName) {
-  gd::String newNameWithNamespace = GetNameSpace() + newConditionName;
-  gd::String copiedNameWithNamespace = GetNameSpace() + copiedConditionName;
+    const gd::String& newConditionName,
+    const gd::String& copiedConditionName,
+    gd::DuplicatedInstructionOptions options) {
+  gd::String newNameWithNamespace =
+      (options.unscoped ? "" : GetNameSpace()) + newConditionName;
+  gd::String copiedNameWithNamespace =
+      (options.unscoped ? "" : GetNameSpace()) + copiedConditionName;
 
   auto copiedCondition = conditionsInfos.find(copiedNameWithNamespace);
   if (copiedCondition == conditionsInfos.end()) {
-    gd::LogWarning("Could not find a condition with name " +
+    gd::LogError("Could not find a condition with name " +
                    copiedNameWithNamespace + " to copy.");
   } else {
     conditionsInfos[newNameWithNamespace] = copiedCondition->second;
@@ -395,7 +417,7 @@ gd::ExpressionMetadata& PlatformExtension::AddDuplicatedExpression(
 
   auto copiedExpression = expressionsInfos.find(copiedNameWithNamespace);
   if (copiedExpression == expressionsInfos.end()) {
-    gd::LogWarning("Could not find an expression with name " +
+    gd::LogError("Could not find an expression with name " +
                    copiedNameWithNamespace + " to copy.");
   } else {
     expressionsInfos[newNameWithNamespace] = copiedExpression->second;
@@ -412,7 +434,7 @@ gd::ExpressionMetadata& PlatformExtension::AddDuplicatedStrExpression(
 
   auto copiedExpression = strExpressionsInfos.find(copiedNameWithNamespace);
   if (copiedExpression == strExpressionsInfos.end()) {
-    gd::LogWarning("Could not find a string expression with name " +
+    gd::LogError("Could not find a string expression with name " +
                    copiedNameWithNamespace + " to copy.");
   } else {
     strExpressionsInfos[newNameWithNamespace] = copiedExpression->second;
@@ -512,7 +534,8 @@ PlatformExtension::GetAllStrExpressionsForBehavior(gd::String autoType) {
   return badExpressionsMetadata;
 }
 
-gd::BaseEventSPtr PlatformExtension::CreateEvent(const gd::String& eventType) const {
+gd::BaseEventSPtr PlatformExtension::CreateEvent(
+    const gd::String& eventType) const {
   if (eventsInfos.find(eventType) != eventsInfos.end()) {
     if (eventsInfos.find(eventType)->second.instance ==
         std::shared_ptr<BaseEvent>()) {
@@ -528,7 +551,6 @@ gd::BaseEventSPtr PlatformExtension::CreateEvent(const gd::String& eventType) co
 
   return std::shared_ptr<gd::BaseEvent>();
 }
-#endif
 
 CreateFunPtr PlatformExtension::GetObjectCreationFunctionPtr(
     const gd::String& objectType) const {
@@ -607,13 +629,12 @@ bool PlatformExtension::IsBuiltin() const {
          builtinExtensions.end();
 }
 
-#if defined(GD_IDE_ONLY)
 void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
   for (std::map<gd::String, gd::InstructionMetadata>::iterator it =
            GetAllActions().begin();
        it != GetAllActions().end();) {
     if (it->second.codeExtraInformation.functionCallName.empty() &&
-        !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+        !it->second.HasCustomCodeGenerator()) {
       GetAllActions().erase(it++);
     } else
       ++it;
@@ -623,7 +644,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
            GetAllConditions().begin();
        it != GetAllConditions().end();) {
     if (it->second.codeExtraInformation.functionCallName.empty() &&
-        !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+        !it->second.HasCustomCodeGenerator()) {
       GetAllConditions().erase(it++);
     } else
       ++it;
@@ -633,7 +654,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
            GetAllExpressions().begin();
        it != GetAllExpressions().end();) {
     if (it->second.codeExtraInformation.functionCallName.empty() &&
-        !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+        !it->second.HasCustomCodeGenerator()) {
       GetAllExpressions().erase(it++);
     } else
       ++it;
@@ -643,7 +664,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
            GetAllStrExpressions().begin();
        it != GetAllStrExpressions().end();) {
     if (it->second.codeExtraInformation.functionCallName.empty() &&
-        !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+        !it->second.HasCustomCodeGenerator()) {
       GetAllStrExpressions().erase(it++);
     } else
       ++it;
@@ -659,7 +680,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.actionsInfos.begin();
          it != obj.actionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.actionsInfos.erase(it++);
       } else
         ++it;
@@ -669,7 +690,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.conditionsInfos.begin();
          it != obj.conditionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.conditionsInfos.erase(it++);
       } else
         ++it;
@@ -679,7 +700,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.expressionsInfos.begin();
          it != obj.expressionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.expressionsInfos.erase(it++);
       } else
         ++it;
@@ -689,7 +710,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.strExpressionsInfos.begin();
          it != obj.strExpressionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.strExpressionsInfos.erase(it++);
       } else
         ++it;
@@ -706,7 +727,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.actionsInfos.begin();
          it != obj.actionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.actionsInfos.erase(it++);
       } else
         ++it;
@@ -716,7 +737,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.conditionsInfos.begin();
          it != obj.conditionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.conditionsInfos.erase(it++);
       } else
         ++it;
@@ -726,7 +747,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.expressionsInfos.begin();
          it != obj.expressionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.expressionsInfos.erase(it++);
       } else
         ++it;
@@ -736,7 +757,7 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
              obj.strExpressionsInfos.begin();
          it != obj.strExpressionsInfos.end();) {
       if (it->second.codeExtraInformation.functionCallName.empty() &&
-          !it->second.codeExtraInformation.HasCustomCodeGenerator()) {
+          !it->second.HasCustomCodeGenerator()) {
         obj.strExpressionsInfos.erase(it++);
       } else
         ++it;
@@ -752,9 +773,43 @@ void PlatformExtension::StripUnimplementedInstructionsAndExpressions() {
       ++it;
   }
 }
-#endif
 
-PlatformExtension::PlatformExtension() : deprecated(false) {}
+gd::String
+PlatformExtension::GetEventsFunctionFullType(const gd::String &extensionName,
+                                             const gd::String &functionName) {
+  const auto &separator = GetNamespaceSeparator();
+  return extensionName + separator + functionName;
+}
+
+gd::String PlatformExtension::GetBehaviorEventsFunctionFullType(
+    const gd::String &extensionName, const gd::String &behaviorName,
+    const gd::String &functionName) {
+  const auto &separator = GetNamespaceSeparator();
+  return extensionName + separator + behaviorName + separator + functionName;
+}
+
+gd::String
+PlatformExtension::GetBehaviorFullType(const gd::String &extensionName,
+                                       const gd::String &behaviorName) {
+  const auto &separator = GetNamespaceSeparator();
+  return extensionName + separator + behaviorName;
+}
+
+gd::String PlatformExtension::GetObjectEventsFunctionFullType(
+    const gd::String &extensionName, const gd::String &objectName,
+    const gd::String &functionName) {
+  const auto &separator = GetNamespaceSeparator();
+  return extensionName + separator + objectName + separator + functionName;
+}
+
+gd::String PlatformExtension::GetObjectFullType(const gd::String &extensionName,
+                                                const gd::String &objectName) {
+  const auto &separator = GetNamespaceSeparator();
+  return extensionName + separator + objectName;
+}
+
+PlatformExtension::PlatformExtension()
+    : deprecated(false), category(_("General")) {}
 
 PlatformExtension::~PlatformExtension() {}
 

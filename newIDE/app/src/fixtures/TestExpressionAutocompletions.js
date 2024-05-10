@@ -1,6 +1,6 @@
 // @flow
 import { type ExpressionAutocompletion } from '../ExpressionAutocompletion';
-import { type EnumeratedExpressionMetadata } from '../InstructionOrExpression/EnumeratedInstructionOrExpressionMetadata.js';
+import { type EnumeratedExpressionMetadata } from '../InstructionOrExpression/EnumeratedInstructionOrExpressionMetadata';
 import { mapVector } from '../Utils/MapFor';
 
 const makeNewFakeExtension = (gd: libGDevelop) => {
@@ -32,6 +32,10 @@ const makeFakeEnumeratedExpressionMetadata = (
   ),
   scope: { extension },
   isPrivate: false,
+  isRelevantForLayoutEvents: true,
+  isRelevantForFunctionEvents: true,
+  isRelevantForAsynchronousFunctionEvents: true,
+  isRelevantForCustomObjectEvents: true,
 });
 
 export const makeFakeExactExpressionAutocompletion = () => {
@@ -63,6 +67,7 @@ export const makeFakeExactExpressionAutocompletion = () => {
         extension,
         expressionMetadata
       ),
+      shouldConvertToString: false,
     },
   ];
 };
@@ -100,32 +105,37 @@ export const makeFakeExpressionAutocompletions = (): Array<ExpressionAutocomplet
     {
       kind: 'Object',
       completion: 'SomeObject',
+      objectConfiguration: null,
       addDot: true,
       isExact: false,
     },
     {
       kind: 'Object',
       completion: 'SomeOtherObject',
+      objectConfiguration: null,
       addDot: true,
       isExact: false,
     },
     {
       kind: 'Object',
       completion: 'SomeOtherObjectWithALoooooooooooongLoooooooooooongName',
+      objectConfiguration: null,
       addDot: true,
       isExact: false,
     },
     {
       kind: 'Behavior',
-      completion: 'PlatformerObject',
+      completion: 'PlatformBehavior::PlatformerObjectBehavior',
       addNamespaceSeparator: true,
       isExact: false,
+      behaviorType: '',
     },
     {
       kind: 'Behavior',
       completion: 'Physics2',
       addNamespaceSeparator: true,
       isExact: false,
+      behaviorType: 'Physics2::Physics2Behavior',
     },
     {
       kind: 'Expression',
@@ -137,6 +147,7 @@ export const makeFakeExpressionAutocompletions = (): Array<ExpressionAutocomplet
         extension,
         expressionWithoutParamsMetadata
       ),
+      shouldConvertToString: false,
     },
     {
       kind: 'Expression',
@@ -148,6 +159,19 @@ export const makeFakeExpressionAutocompletions = (): Array<ExpressionAutocomplet
         extension,
         expressionMetadata
       ),
+      shouldConvertToString: false,
+    },
+    {
+      kind: 'Expression',
+      completion: 'MyFunctionThatShouldBeConvertedToString',
+      addParenthesis: true,
+      isExact: false,
+      enumeratedExpressionMetadata: makeFakeEnumeratedExpressionMetadata(
+        'MyFunction',
+        extension,
+        expressionMetadata
+      ),
+      shouldConvertToString: true,
     },
   ];
 };

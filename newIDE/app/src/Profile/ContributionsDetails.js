@@ -161,7 +161,7 @@ type Props = {|
   userId: string,
 |};
 
-export default ({ userId }: Props) => {
+const ContributionDetails = ({ userId }: Props) => {
   const [
     extensions,
     setExtensions,
@@ -219,14 +219,12 @@ export default ({ userId }: Props) => {
   );
 
   return (
-    <>
-      <Column>
-        <Line alignItems="center">
-          <Text size="title">
-            <Trans>Contributions</Trans>
-          </Text>
-        </Line>
-      </Column>
+    <Column noMargin>
+      <Line alignItems="center">
+        <Text size="block-title">
+          <Trans>Contributions</Trans>
+        </Text>
+      </Line>
       {examples && extensions ? (
         <>
           <ExtensionsAccordion
@@ -249,6 +247,8 @@ export default ({ userId }: Props) => {
       ) : (
         <PlaceholderLoader />
       )}
-    </>
+    </Column>
   );
 };
+
+export default ContributionDetails;

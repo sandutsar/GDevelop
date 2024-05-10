@@ -77,8 +77,6 @@ bool SerializerElement::GetBoolAttribute(const gd::String& name,
     }
   }
 
-  std::cout << "Bool attribute \"" << name << "\" not found, returning "
-            << defaultValue;
   return defaultValue;
 }
 
@@ -210,8 +208,7 @@ SerializerElement& SerializerElement::GetChild(
   for (size_t i = 0; i < children.size(); ++i) {
     if (children[i].second == std::shared_ptr<SerializerElement>()) continue;
 
-    if (children[i].first == name ||
-        (isArray && children[i].first.empty()) ||
+    if (children[i].first == name || (isArray && children[i].first.empty()) ||
         (!deprecatedName.empty() && children[i].first == deprecatedName)) {
       if (index == currentIndex)
         return *children[i].second;
@@ -244,8 +241,7 @@ std::size_t SerializerElement::GetChildrenCount(
   for (size_t i = 0; i < children.size(); ++i) {
     if (children[i].second == std::shared_ptr<SerializerElement>()) continue;
 
-    if (children[i].first == name ||
-        (isArray && children[i].first.empty()) ||
+    if (children[i].first == name || (isArray && children[i].first.empty()) ||
         (!deprecatedName.empty() && children[i].first == deprecatedName))
       currentIndex++;
   }
@@ -291,6 +287,33 @@ void SerializerElement::Init(const gd::SerializerElement& other) {
   isArray = other.isArray;
   arrayOf = other.arrayOf;
   deprecatedArrayOf = other.deprecatedArrayOf;
+}
+
+void SerializerElement::SetMultilineStringValue(const gd::String& value) {
+  if (value.find('\n') == gd::String::npos) {
+    SetStringValue(value);
+    return;
+  }
+
+  std::vector<gd::String> lines = value.Split('\n');
+  children.clear();
+  ConsiderAsArrayOf("");
+  for (const auto& line : lines) {
+    AddChild("").SetStringValue(line);
+  }
+}
+
+gd::String SerializerElement::GetMultilineStringValue() {
+  if (!ConsideredAsArray()) {
+    return GetValue().GetString();
+  }
+
+  gd::String value;
+  for (const auto& child : children) {
+    if (!value.empty()) value += "\n";
+    value += child.second->GetStringValue();
+  }
+  return value;
 }
 
 }  // namespace gd

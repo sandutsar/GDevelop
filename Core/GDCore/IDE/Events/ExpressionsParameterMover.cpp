@@ -11,7 +11,6 @@
 
 #include "GDCore/Events/Event.h"
 #include "GDCore/Events/EventsList.h"
-#include "GDCore/Events/Parsers/ExpressionParser2.h"
 #include "GDCore/Events/Parsers/ExpressionParser2NodePrinter.h"
 #include "GDCore/Events/Parsers/ExpressionParser2NodeWorker.h"
 #include "GDCore/Extensions/Metadata/MetadataProvider.h"
@@ -32,16 +31,14 @@ namespace gd {
 class GD_CORE_API ExpressionParameterMover
     : public ExpressionParser2NodeWorker {
  public:
-  ExpressionParameterMover(const gd::ObjectsContainer& globalObjectsContainer_,
-                           const gd::ObjectsContainer& objectsContainer_,
+  ExpressionParameterMover(const gd::ProjectScopedContainers& projectScopedContainers_,
                            const gd::String& behaviorType_,
                            const gd::String& objectType_,
                            const gd::String& functionName_,
                            std::size_t oldIndex_,
                            std::size_t newIndex_)
       : hasDoneMoving(false),
-        globalObjectsContainer(globalObjectsContainer_),
-        objectsContainer(objectsContainer_),
+        projectScopedContainers(projectScopedContainers_),
         behaviorType(behaviorType_),
         objectType(objectType_),
         functionName(functionName_),
@@ -79,13 +76,16 @@ class GD_CORE_API ExpressionParameterMover
   void OnVisitObjectFunctionNameNode(ObjectFunctionNameNode& node) override {}
   void OnVisitFunctionCallNode(FunctionCallNode& node) override {
     auto moveParameter =
-        [this](std::vector<std::unique_ptr<gd::ExpressionNode>>& parameters) {
-          if (oldIndex >= parameters.size() || newIndex >= parameters.size())
+        [this](std::vector<std::unique_ptr<gd::ExpressionNode>>& parameters, int firstWrittenParameterIndex) {
+          size_t newExpressionIndex = newIndex - firstWrittenParameterIndex;
+          size_t oldExpressionIndex = oldIndex - firstWrittenParameterIndex;
+
+          if (oldExpressionIndex >= parameters.size() || newExpressionIndex >= parameters.size())
             return;
 
-          auto movedParameterNode = std::move(parameters[oldIndex]);
-          parameters.erase(parameters.begin() + oldIndex);
-          parameters.insert(parameters.begin() + newIndex,
+          auto movedParameterNode = std::move(parameters[oldExpressionIndex]);
+          parameters.erase(parameters.begin() + oldExpressionIndex);
+          parameters.insert(parameters.begin() + newExpressionIndex,
                             std::move(movedParameterNode));
         };
 
@@ -93,23 +93,26 @@ class GD_CORE_API ExpressionParameterMover
       if (behaviorType.empty() && !objectType.empty() &&
           !node.objectName.empty()) {
         // Move parameter of an object function
-        const gd::String& thisObjectType = gd::GetTypeOfObject(
-            globalObjectsContainer, objectsContainer, node.objectName);
-        if (thisObjectType == behaviorType) {
-          moveParameter(node.parameters);
+        // This refactor only applies on events object functions
+        // and events object functions doesn't exist yet.
+        // This is a dead code.
+        const gd::String& thisObjectType = projectScopedContainers
+            .GetObjectsContainersList().GetTypeOfObject(node.objectName);
+        if (thisObjectType == objectType) {
+          moveParameter(node.parameters, 1);
           hasDoneMoving = true;
         }
       } else if (!behaviorType.empty() && !node.behaviorName.empty()) {
         // Move parameter of a behavior function
-        const gd::String& thisBehaviorType = gd::GetTypeOfBehavior(
-            globalObjectsContainer, objectsContainer, node.behaviorName);
+        const gd::String& thisBehaviorType = projectScopedContainers
+            .GetObjectsContainersList().GetTypeOfBehavior(node.behaviorName);
         if (thisBehaviorType == behaviorType) {
-          moveParameter(node.parameters);
+          moveParameter(node.parameters, 2);
           hasDoneMoving = true;
         }
       } else if (behaviorType.empty() && objectType.empty()) {
         // Move parameter of a free function
-        moveParameter(node.parameters);
+        moveParameter(node.parameters, 1);
         hasDoneMoving = true;
       }
     }
@@ -121,8 +124,7 @@ class GD_CORE_API ExpressionParameterMover
 
  private:
   bool hasDoneMoving;
-  const gd::ObjectsContainer& globalObjectsContainer;
-  const gd::ObjectsContainer& objectsContainer;
+  const gd::ProjectScopedContainers& projectScopedContainers;
   const gd::String& behaviorType;  // The behavior type of the function which
                                    // must have a parameter moved (optional).
   const gd::String& objectType;    // The object type of the function which
@@ -145,21 +147,12 @@ bool ExpressionsParameterMover::DoVisitInstruction(gd::Instruction& instruction,
   for (std::size_t pNb = 0; pNb < metadata.parameters.size() &&
                             pNb < instruction.GetParametersCount();
        ++pNb) {
-    const gd::String& type = metadata.parameters[pNb].type;
-    const gd::String& expression =
-        instruction.GetParameter(pNb).GetPlainString();
+    const gd::String& type = metadata.parameters[pNb].GetType();
+    const gd::Expression& expression = instruction.GetParameter(pNb);
 
-    gd::ExpressionParser2 parser(
-        platform, GetGlobalObjectsContainer(), GetObjectsContainer());
-
-    auto node = gd::ParameterMetadata::IsExpression("number", type)
-                    ? parser.ParseExpression("number", expression)
-                    : (gd::ParameterMetadata::IsExpression("string", type)
-                           ? parser.ParseExpression("string", expression)
-                           : std::unique_ptr<gd::ExpressionNode>());
+    auto node = expression.GetRootNode();
     if (node) {
-      ExpressionParameterMover mover(GetGlobalObjectsContainer(),
-                                     GetObjectsContainer(),
+      ExpressionParameterMover mover(GetProjectScopedContainers(),
                                      behaviorType,
                                      objectType,
                                      functionName,

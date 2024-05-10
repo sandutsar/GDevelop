@@ -60,7 +60,7 @@ class GD_CORE_API Resource {
    * \see gd::Resource::GetFile
    * \see gd::Resource::SetFile
    */
-  virtual bool UseFile() { return false; }
+  virtual bool UseFile() const { return false; }
 
   /**
    * \brief Return, if applicable, the String containing the file used by the
@@ -142,7 +142,7 @@ class GD_CORE_API Resource {
   virtual void SerializeTo(SerializerElement& element) const {};
 
   /**
-   * \brief Unserialize the objectt.
+   * \brief Unserialize the object.
    */
   virtual void UnserializeFrom(const SerializerElement& element){};
 
@@ -184,7 +184,7 @@ class GD_CORE_API ImageResource : public Resource {
    */
   virtual void SetFile(const gd::String& newFile) override;
 
-  virtual bool UseFile() override { return true; }
+  virtual bool UseFile() const override { return true; }
 
   std::map<gd::String, gd::PropertyDescriptor> GetProperties() const override;
   bool UpdateProperty(const gd::String& name, const gd::String& value) override;
@@ -195,7 +195,7 @@ class GD_CORE_API ImageResource : public Resource {
   void SerializeTo(SerializerElement& element) const override;
 
   /**
-   * \brief Unserialize the objectt.
+   * \brief Unserialize the object.
    */
   void UnserializeFrom(const SerializerElement& element) override;
 
@@ -223,7 +223,7 @@ class GD_CORE_API ImageResource : public Resource {
  */
 class GD_CORE_API AudioResource : public Resource {
  public:
-  AudioResource() : Resource(), preloadAsMusic(false), preloadAsSound(false) {
+  AudioResource() : Resource(), preloadAsMusic(false), preloadAsSound(false), preloadInCache(false) {
     SetKind("audio");
   };
   virtual ~AudioResource(){};
@@ -234,7 +234,7 @@ class GD_CORE_API AudioResource : public Resource {
   virtual const gd::String& GetFile() const override { return file; };
   virtual void SetFile(const gd::String& newFile) override;
 
-  virtual bool UseFile() override { return true; }
+  virtual bool UseFile() const override { return true; }
 
   std::map<gd::String, gd::PropertyDescriptor> GetProperties() const override;
   bool UpdateProperty(const gd::String& name, const gd::String& value) override;
@@ -263,10 +263,21 @@ class GD_CORE_API AudioResource : public Resource {
    */
   void SetPreloadAsSound(bool enable = true) { preloadAsSound = enable; }
 
+  /**
+   * \brief Return true if the audio resource should be preloaded in cache (without decoding into memory).
+   */
+  bool PreloadInCache() const { return preloadInCache; }
+
+  /**
+   * \brief Set if the audio resource should be preloaded in cache (without decoding into memory).
+   */
+  void SetPreloadInCache(bool enable = true) { preloadInCache = enable; }
+
  private:
   gd::String file;
   bool preloadAsSound;
   bool preloadAsMusic;
+  bool preloadInCache;
 };
 
 /**
@@ -286,7 +297,7 @@ class GD_CORE_API FontResource : public Resource {
   virtual const gd::String& GetFile() const override { return file; };
   virtual void SetFile(const gd::String& newFile) override;
 
-  virtual bool UseFile() override { return true; }
+  virtual bool UseFile() const override { return true; }
   void SerializeTo(SerializerElement& element) const override;
 
   void UnserializeFrom(const SerializerElement& element) override;
@@ -312,7 +323,7 @@ class GD_CORE_API VideoResource : public Resource {
   virtual const gd::String& GetFile() const override { return file; };
   virtual void SetFile(const gd::String& newFile) override;
 
-  virtual bool UseFile() override { return true; }
+  virtual bool UseFile() const override { return true; }
   void SerializeTo(SerializerElement& element) const override;
 
   void UnserializeFrom(const SerializerElement& element) override;
@@ -338,7 +349,7 @@ class GD_CORE_API JsonResource : public Resource {
   virtual const gd::String& GetFile() const override { return file; };
   virtual void SetFile(const gd::String& newFile) override;
 
-  virtual bool UseFile() override { return true; }
+  virtual bool UseFile() const override { return true; }
 
   std::map<gd::String, gd::PropertyDescriptor> GetProperties() const override;
   bool UpdateProperty(const gd::String& name, const gd::String& value) override;
@@ -363,6 +374,103 @@ class GD_CORE_API JsonResource : public Resource {
 };
 
 /**
+ * \brief Describe a spine json file used by a project.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API SpineResource : public JsonResource {
+ public:
+  SpineResource() : JsonResource() { SetKind("spine"); };
+  virtual ~SpineResource(){};
+  virtual SpineResource* Clone() const override {
+    return new SpineResource(*this);
+  }
+};
+
+/**
+ * \brief Describe a tilemap file used by a project.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API TilemapResource : public Resource {
+ public:
+  TilemapResource() : Resource(), disablePreload(false) { SetKind("tilemap"); };
+  virtual ~TilemapResource(){};
+  virtual TilemapResource* Clone() const override {
+    return new TilemapResource(*this);
+  }
+
+  virtual const gd::String& GetFile() const override { return file; };
+  virtual void SetFile(const gd::String& newFile) override;
+
+  virtual bool UseFile() const override { return true; }
+
+  std::map<gd::String, gd::PropertyDescriptor> GetProperties() const override;
+  bool UpdateProperty(const gd::String& name, const gd::String& value) override;
+
+  void SerializeTo(SerializerElement& element) const override;
+
+  void UnserializeFrom(const SerializerElement& element) override;
+
+  /**
+   * \brief Return true if the loading at game startup must be disabled
+   */
+  bool IsPreloadDisabled() const { return disablePreload; }
+
+  /**
+   * \brief Set if the tilemap preload at game startup must be disabled
+   */
+  void DisablePreload(bool disable = true) { disablePreload = disable; }
+
+ private:
+  bool disablePreload;  ///< If "true", don't load the tilemap at game startup
+  gd::String file;
+};
+
+/**
+ * \brief Describe a tileset file used by a project.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API TilesetResource : public Resource {
+ public:
+  TilesetResource() : Resource(), disablePreload(false) { SetKind("tileset"); };
+  virtual ~TilesetResource(){};
+  virtual TilesetResource* Clone() const override {
+    return new TilesetResource(*this);
+  }
+
+  virtual const gd::String& GetFile() const override { return file; };
+  virtual void SetFile(const gd::String& newFile) override;
+
+  virtual bool UseFile() const override { return true; }
+
+  std::map<gd::String, gd::PropertyDescriptor> GetProperties() const override;
+  bool UpdateProperty(const gd::String& name, const gd::String& value) override;
+
+  void SerializeTo(SerializerElement& element) const override;
+
+  void UnserializeFrom(const SerializerElement& element) override;
+
+  /**
+   * \brief Return true if the loading at game startup must be disabled
+   */
+  bool IsPreloadDisabled() const { return disablePreload; }
+
+  /**
+   * \brief Set if the tilemap preload at game startup must be disabled
+   */
+  void DisablePreload(bool disable = true) { disablePreload = disable; }
+
+ private:
+  bool disablePreload;  ///< If "true", don't load the tilemap at game startup
+  gd::String file;
+};
+
+/**
  * \brief Describe a bitmap font file used by a project.
  *
  * \see Resource
@@ -379,7 +487,59 @@ class GD_CORE_API BitmapFontResource : public Resource {
   virtual const gd::String& GetFile() const override { return file; };
   virtual void SetFile(const gd::String& newFile) override;
 
-  virtual bool UseFile() override { return true; }
+  virtual bool UseFile() const override { return true; }
+  void SerializeTo(SerializerElement& element) const override;
+
+  void UnserializeFrom(const SerializerElement& element) override;
+
+ private:
+  gd::String file;
+};
+
+/**
+ * \brief Describe a 3D model file used by a project.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API Model3DResource : public Resource {
+ public:
+  Model3DResource() : Resource() { SetKind("model3D"); };
+  virtual ~Model3DResource(){};
+  virtual Model3DResource* Clone() const override {
+    return new Model3DResource(*this);
+  }
+
+  virtual const gd::String& GetFile() const override { return file; };
+  virtual void SetFile(const gd::String& newFile) override;
+
+  virtual bool UseFile() const override { return true; }
+  void SerializeTo(SerializerElement& element) const override;
+
+  void UnserializeFrom(const SerializerElement& element) override;
+
+ private:
+  gd::String file;
+};
+
+/**
+ * \brief Describe an atlas file used by a project.
+ *
+ * \see Resource
+ * \ingroup ResourcesManagement
+ */
+class GD_CORE_API AtlasResource : public Resource {
+ public:
+  AtlasResource() : Resource() { SetKind("atlas"); };
+  virtual ~AtlasResource(){};
+  virtual AtlasResource* Clone() const override {
+    return new AtlasResource(*this);
+  }
+
+  virtual const gd::String& GetFile() const override { return file; };
+  virtual void SetFile(const gd::String& newFile) override;
+
+  virtual bool UseFile() const override { return true; }
   void SerializeTo(SerializerElement& element) const override;
 
   void UnserializeFrom(const SerializerElement& element) override;
@@ -447,7 +607,7 @@ class GD_CORE_API ResourcesManager {
    * \brief Return a list of the files, from the specified input list,
    * that are not used as files by the resources.
    */
-  std::vector<gd::String> FindFilesNotInResources(const std::vector<gd::String>& filesToCheck) const;
+  std::vector<gd::String> FindFilesNotInResources(const std::vector<gd::String>& filePathsToCheck) const;
 
   /**
    * \brief Return a (smart) pointer to a resource.
@@ -544,7 +704,12 @@ class GD_CORE_API ResourcesManager {
   void SerializeTo(SerializerElement& element) const;
 
   /**
-   * \brief Unserialize the objectt.
+   * \brief Serialize one resource.
+   */
+  static void SerializeResourceTo(gd::Resource& resource, SerializerElement& resourceElement);
+
+  /**
+   * \brief Unserialize the object.
    */
   void UnserializeFrom(const SerializerElement& element);
 
@@ -621,7 +786,7 @@ class GD_CORE_API ResourceFolder {
   void SerializeTo(SerializerElement& element) const;
 
   /**
-   * \brief Unserialize the objectt.
+   * \brief Unserialize the object.
    */
   void UnserializeFrom(const SerializerElement& element,
                        gd::ResourcesManager& parentManager);

@@ -13,6 +13,10 @@ type Props = {|
   onAddCommentEvent: () => void,
   allEventsMetadata: Array<EventMetadata>,
   onAddEvent: (eventType: string) => Array<gdBaseEvent>,
+  onToggleInvertedCondition: () => void,
+  onToggleDisabledEvent: () => void,
+  canToggleEventDisabled: boolean,
+  canToggleInstructionInverted: boolean,
   onRemove: () => void,
   canRemove: boolean,
   undo: () => void,
@@ -21,6 +25,8 @@ type Props = {|
   canRedo: boolean,
   onToggleSearchPanel: () => void,
   onOpenSettings?: ?() => void,
+  moveEventsIntoNewGroup: () => void,
+  canMoveEventsIntoNewGroup: boolean,
 |};
 
 const ToolbarCommands = (props: Props) => {
@@ -38,6 +44,14 @@ const ToolbarCommands = (props: Props) => {
     handler: props.onAddCommentEvent,
   });
 
+  useCommand('TOGGLE_EVENT_DISABLED', props.canToggleEventDisabled, {
+    handler: props.onToggleDisabledEvent,
+  });
+
+  useCommand('TOGGLE_CONDITION_INVERTED', props.canToggleInstructionInverted, {
+    handler: props.onToggleInvertedCondition,
+  });
+
   useCommandWithOptions('CHOOSE_AND_ADD_EVENT', true, {
     generateOptions: React.useCallback(
       () =>
@@ -49,6 +63,10 @@ const ToolbarCommands = (props: Props) => {
         })),
       [props.allEventsMetadata, onAddEvent]
     ),
+  });
+
+  useCommand('MOVE_EVENTS_IN_NEW_GROUP', props.canMoveEventsIntoNewGroup, {
+    handler: props.moveEventsIntoNewGroup,
   });
 
   useCommand('DELETE_SELECTION', props.canRemove, {

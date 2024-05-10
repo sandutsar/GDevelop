@@ -13,6 +13,8 @@ declare class gdEventsFunctionsExtension extends gdEventsFunctionsContainer {
   getName(): string;
   setFullName(fullName: string): gdEventsFunctionsExtension;
   getFullName(): string;
+  setCategory(category: string): gdEventsFunctionsExtension;
+  getCategory(): string;
   getTags(): gdVectorString;
   getAuthorIds(): gdVectorString;
   setAuthor(author: string): gdEventsFunctionsExtension;
@@ -30,6 +32,7 @@ declare class gdEventsFunctionsExtension extends gdEventsFunctionsContainer {
   removeDependencyAt(index: number): void;
   getAllDependencies(): gdVectorDependencyMetadata;
   getEventsBasedBehaviors(): gdEventsBasedBehaviorsList;
+  getEventsBasedObjects(): gdEventsBasedObjectsList;
   serializeTo(element: gdSerializerElement): void;
   unserializeFrom(project: gdProject, element: gdSerializerElement): void;
   static isExtensionLifecycleEventsFunction(eventsFunctionName: string): boolean;

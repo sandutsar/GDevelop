@@ -1,10 +1,10 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import { I18n } from '@lingui/react';
+import { type I18n as I18nType } from '@lingui/core';
 import * as React from 'react';
 import Dialog from '../../UI/Dialog';
 import FlatButton from '../../UI/FlatButton';
-import CloudDownload from '@material-ui/icons/CloudDownload';
 import { ExtensionStore } from '.';
 import EventsFunctionsExtensionsContext from '../../EventsFunctionsExtensionsLoader/EventsFunctionsExtensionsContext';
 import HelpButton from '../../UI/HelpButton';
@@ -16,23 +16,30 @@ import {
   addCreateBadgePreHookIfNotClaimed,
   TRIVIAL_FIRST_EXTENSION,
 } from '../../Utils/GDevelopServices/Badge';
+import { useResponsiveWindowSize } from '../../UI/Responsive/ResponsiveWindowMeasurer';
+import Download from '../../UI/CustomSvgIcons/Download';
+import Add from '../../UI/CustomSvgIcons/Add';
+import ErrorBoundary from '../../UI/ErrorBoundary';
 
 type Props = {|
   project: gdProject,
   onClose: () => void,
   onInstallExtension: ExtensionShortHeader => void,
   onExtensionInstalled?: (extensionShortHeader?: ExtensionShortHeader) => void,
+  onCreateNew?: () => void,
 |};
 
 /**
  * Allows to browse and install events based extensions.
  */
-export default function ExtensionsSearchDialog({
+const ExtensionsSearchDialog = ({
   project,
   onClose,
   onInstallExtension,
   onExtensionInstalled,
-}: Props) {
+  onCreateNew,
+}: Props) => {
+  const { isMobile } = useResponsiveWindowSize();
   const [isInstalling, setIsInstalling] = React.useState(false);
   const [extensionWasInstalled, setExtensionWasInstalled] = React.useState(
     false
@@ -48,16 +55,53 @@ export default function ExtensionsSearchDialog({
     installExtension
   );
 
+  const installOrImportExtension = async (
+    i18n: I18nType,
+    extensionShortHeader?: ExtensionShortHeader
+  ) => {
+    setIsInstalling(true);
+    try {
+      let wasExtensionInstalledOrImported;
+      if (!!extensionShortHeader) {
+        onInstallExtension(extensionShortHeader);
+        wasExtensionInstalledOrImported = await installDisplayedExtension(
+          i18n,
+          project,
+          eventsFunctionsExtensionsState,
+          extensionShortHeader
+        );
+      } else {
+        wasExtensionInstalledOrImported = await importExtension(
+          i18n,
+          eventsFunctionsExtensionsState,
+          project
+        );
+      }
+
+      if (wasExtensionInstalledOrImported) {
+        setExtensionWasInstalled(true);
+        if (onExtensionInstalled) onExtensionInstalled();
+        return true;
+      }
+
+      return false;
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
   const eventsFunctionsExtensionOpener = eventsFunctionsExtensionsState.getEventsFunctionsExtensionOpener();
 
   return (
     <I18n>
       {({ i18n }) => (
         <Dialog
-          fullHeight
           title={<Trans>Search for New Extensions</Trans>}
+          id="extension-search-dialog"
+          fullHeight
           actions={[
             <FlatButton
+              id="close-button"
               key="close"
               label={<Trans>Close</Trans>}
               primary
@@ -69,51 +113,46 @@ export default function ExtensionsSearchDialog({
             <HelpButton key="help" helpPagePath="/extensions/search" />,
             eventsFunctionsExtensionOpener ? (
               <FlatButton
-                icon={<CloudDownload />}
+                leftIcon={<Download />}
                 key="import"
-                label={<Trans>Import extension</Trans>}
+                label={
+                  isMobile ? (
+                    <Trans>Import</Trans>
+                  ) : (
+                    <Trans>Import extension</Trans>
+                  )
+                }
                 onClick={() => {
-                  (async () => {
-                    setIsInstalling(true);
-                    const wasExtensionImported = await importExtension(
-                      i18n,
-                      eventsFunctionsExtensionsState,
-                      project
-                    );
-                    if (wasExtensionImported && onExtensionInstalled)
-                      onExtensionInstalled();
-
-                    setExtensionWasInstalled(wasExtensionImported);
-                    setIsInstalling(false);
-                  })();
+                  installOrImportExtension(i18n);
                 }}
                 disabled={isInstalling}
               />
             ) : null,
+            onCreateNew ? (
+              <FlatButton
+                key="create-new"
+                onClick={onCreateNew}
+                label={
+                  isMobile ? (
+                    <Trans>Create</Trans>
+                  ) : (
+                    <Trans>Create a new extension</Trans>
+                  )
+                }
+                leftIcon={<Add />}
+              />
+            ) : null,
           ]}
-          cannotBeDismissed={true}
           flexBody
           open
-          noMargin
+          cannotBeDismissed={isInstalling}
           onRequestClose={onClose}
         >
           <ExtensionStore
             isInstalling={isInstalling}
-            onInstall={async extensionShortHeader => {
-              setIsInstalling(true);
-              onInstallExtension(extensionShortHeader);
-              const wasExtensionInstalled = await installDisplayedExtension(
-                i18n,
-                project,
-                eventsFunctionsExtensionsState,
-                extensionShortHeader
-              );
-              if (wasExtensionInstalled && onExtensionInstalled)
-                onExtensionInstalled(extensionShortHeader);
-
-              setExtensionWasInstalled(wasExtensionInstalled);
-              setIsInstalling(false);
-            }}
+            onInstall={async extensionShortHeader =>
+              installOrImportExtension(i18n, extensionShortHeader)
+            }
             project={project}
             showOnlyWithBehaviors={false}
           />
@@ -132,4 +171,16 @@ export default function ExtensionsSearchDialog({
       )}
     </I18n>
   );
-}
+};
+
+const ExtensionsSearchDialogWithErrorBoundary = (props: Props) => (
+  <ErrorBoundary
+    componentTitle={<Trans>Extensions search</Trans>}
+    scope="extensions-search-dialog"
+    onClose={props.onClose}
+  >
+    <ExtensionsSearchDialog {...props} />
+  </ErrorBoundary>
+);
+
+export default ExtensionsSearchDialogWithErrorBoundary;

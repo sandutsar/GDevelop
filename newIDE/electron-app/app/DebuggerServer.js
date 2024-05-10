@@ -13,7 +13,7 @@ const closeServer = () => {
 
 /** @param {WebSocket.Server} wsServer */
 const getServerAddress = wsServer => ({
-  address: findLocalIp(),
+  address: findLocalIp() || '127.0.0.1',
   port: wsServer.address().port,
 });
 
@@ -48,6 +48,12 @@ module.exports = {
             log.info(`Debugger connection #${id} closed.`);
             webSockets[id] = null;
             options.onConnectionClose({ id });
+          });
+
+          newWebSocket.on('error', error => {
+            const errorMessage = error.message || 'Unknown error';
+            log.error(`Error in debugger connection #${id}: ${errorMessage}.`);
+            options.onConnectionError({ id, errorMessage });
           });
 
           options.onConnectionOpen({ id });

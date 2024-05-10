@@ -1,55 +1,62 @@
 // @flow
-import { Trans } from '@lingui/macro';
+import { t, Trans } from '@lingui/macro';
 import * as React from 'react';
-import { Column } from '../UI/Grid';
+import { Column, Line, Spacer } from '../UI/Grid';
 import Text from '../UI/Text';
-import Chip from '@material-ui/core/Chip';
-import RaisedButton from '../UI/RaisedButton';
+import Chip from '../UI/Chip';
 import {
   type AssetShortHeader,
   type Asset,
   type Author,
-  getAsset,
+  type ObjectAsset,
+  getPublicAsset,
   isPixelArt,
+  isPrivateAsset,
 } from '../Utils/GDevelopServices/Asset';
-import { getPixelatedImageRendering } from '../Utils/CssHelpers';
-import LeftLoader from '../UI/LeftLoader';
+import {
+  type PrivateAssetPackListingData,
+  type PrivateGameTemplateListingData,
+} from '../Utils/GDevelopServices/Shop';
 import PlaceholderLoader from '../UI/PlaceholderLoader';
 import PlaceholderError from '../UI/PlaceholderError';
-import {
-  type ResourceSource,
-  type ChooseResourceFunction,
-} from '../ResourcesList/ResourceSource';
-import { type ResourceExternalEditor } from '../ResourcesList/ResourceExternalEditor.flow';
-import Add from '@material-ui/icons/Add';
-import { ResponsiveLineStackLayout } from '../UI/Layout';
-import { ResponsiveWindowMeasurer } from '../UI/Reponsive/ResponsiveWindowMeasurer';
-import Dialog from '../UI/Dialog';
-import FlatButton from '../UI/FlatButton';
+import { LineStackLayout, ResponsiveLineStackLayout } from '../UI/Layout';
 import { CorsAwareImage } from '../UI/CorsAwareImage';
 import { AssetStoreContext } from './AssetStoreContext';
-import Link from '@material-ui/core/Link';
 import Window from '../Utils/Window';
-import CheckeredBackground from '../ResourcesList/CheckeredBackground';
+import SelectField from '../UI/SelectField';
+import SelectOption from '../UI/SelectOption';
+import IconButton from '../UI/IconButton';
+import AnimationPreview from '../ObjectEditor/Editors/SpriteEditor/AnimationPreview';
+import ScrollView, { type ScrollViewInterface } from '../UI/ScrollView';
+import AssetsList from './AssetsList';
+import { SimilarAssetStoreSearchFilter } from './AssetStoreSearchFilter';
+import EmptyMessage from '../UI/EmptyMessage';
+import Link from '../UI/Link';
+import PrivateAssetsAuthorizationContext from './PrivateAssets/PrivateAssetsAuthorizationContext';
+import AuthorizedAssetImage from './PrivateAssets/AuthorizedAssetImage';
+import { MarkdownText } from '../UI/MarkdownText';
+import Paper from '../UI/Paper';
+import {
+  getUserPublicProfilesByIds,
+  type UserPublicProfile,
+} from '../Utils/GDevelopServices/User';
+import { getPixelatedImageRendering } from '../Utils/CssHelpers';
+import ArrowRight from '../UI/CustomSvgIcons/ArrowRight';
+import ArrowLeft from '../UI/CustomSvgIcons/ArrowLeft';
+import PublicProfileDialog from '../Profile/PublicProfileDialog';
+
+const FIXED_HEIGHT = 250;
+const FIXED_WIDTH = 300;
 
 const styles = {
-  previewImagePixelated: {
-    width: '100%',
-    imageRendering: getPixelatedImageRendering(),
-    padding: 15,
-  },
   previewBackground: {
     position: 'relative',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 10,
-  },
-  verticalPreviewBackground: {
-    width: 250,
-  },
-  horizontalPreviewBackground: {
-    height: 170,
+    width: FIXED_WIDTH,
+    height: FIXED_HEIGHT,
   },
   chip: {
     marginBottom: 2,
@@ -61,202 +68,527 @@ const styles = {
     maxHeight: '100%',
     verticalAlign: 'middle',
     pointerEvents: 'none',
-    objectFit: 'contain',
+    // Compromise between having a preview of the asset slightly more zoomed
+    // compared to the search results and a not too zoomed image for small
+    // smooth assets that could give a sense of bad quality.
+    flex: 0.6,
+  },
+  arrowContainer: {
+    padding: 6,
   },
 };
 
-type Props = {|
-  project: gdProject,
-  layout: ?gdLayout,
-  objectsContainer: gdObjectsContainer,
-  resourceSources: Array<ResourceSource>,
-  onChooseResource: ChooseResourceFunction,
-  resourceExternalEditors: Array<ResourceExternalEditor>,
+const makeFirstLetterUppercase = (str: string) =>
+  str.charAt(0).toUpperCase() + str.slice(1);
 
+type Props = {|
+  onTagSelection: (tag: string) => void,
   assetShortHeader: AssetShortHeader,
-  onAdd: () => void,
-  onClose: () => void,
-  canInstall: boolean,
-  isBeingInstalled: boolean,
+  onOpenDetails: (assetShortHeader: AssetShortHeader) => void,
+  onAssetLoaded?: () => void,
+  onPrivateAssetPackSelection: (assetPack: PrivateAssetPackListingData) => void,
+  onPrivateGameTemplateSelection: (
+    assetPack: PrivateGameTemplateListingData
+  ) => void,
 |};
 
-export const AssetDetails = ({
-  project,
-  layout,
-  objectsContainer,
-  resourceSources,
-  onChooseResource,
-  resourceExternalEditors,
-  assetShortHeader,
-  onAdd,
-  onClose,
-  canInstall,
-  isBeingInstalled,
-}: Props) => {
-  const { authors, licenses } = React.useContext(AssetStoreContext);
-  const [asset, setAsset] = React.useState<?Asset>(null);
-  const [error, setError] = React.useState<?Error>(null);
-  const loadAsset = React.useCallback(
-    () => {
-      (async () => {
-        try {
-          const loadedAsset = await getAsset(assetShortHeader);
-          setAsset(loadedAsset);
-        } catch (error) {
-          console.log('Error while loading asset:', error);
-          setError(error);
+const getObjectAssetResourcesByName = (
+  objectAsset: ObjectAsset
+): { [string]: any /*(serialized gdResource)*/ } => {
+  const resourcesByName = {};
+
+  objectAsset.resources.forEach(resource => {
+    resourcesByName[resource.name] = resource;
+  });
+
+  return resourcesByName;
+};
+
+export type AssetDetailsInterface = {|
+  getScrollPosition: () => number,
+  scrollToPosition: (y: number) => void,
+|};
+
+export const AssetDetails = React.forwardRef<Props, AssetDetailsInterface>(
+  (
+    {
+      onTagSelection,
+      assetShortHeader,
+      onOpenDetails,
+      onAssetLoaded,
+      onPrivateAssetPackSelection,
+      onPrivateGameTemplateSelection,
+    }: Props,
+    ref
+  ) => {
+    const {
+      authors,
+      licenses,
+      environment,
+      error: filterError,
+      useSearchItem,
+    } = React.useContext(AssetStoreContext);
+    const [asset, setAsset] = React.useState<?Asset>(null);
+    const [
+      selectedAnimationName,
+      setSelectedAnimationName,
+    ] = React.useState<?string>(null);
+    const [error, setError] = React.useState<?Error>(null);
+    const isAssetPrivate = isPrivateAsset(assetShortHeader);
+    const { fetchPrivateAsset } = React.useContext(
+      PrivateAssetsAuthorizationContext
+    );
+    const [authorPublicProfiles, setAuthorPublicProfiles] = React.useState<
+      UserPublicProfile[]
+    >([]);
+    const [
+      selectedAuthorPublicProfile,
+      setSelectedAuthorPublicProfile,
+    ] = React.useState<?UserPublicProfile>(null);
+
+    const scrollView = React.useRef<?ScrollViewInterface>(null);
+    React.useImperativeHandle(ref, () => ({
+      /**
+       * Return the scroll position.
+       */
+      getScrollPosition: () => {
+        const scrollViewElement = scrollView.current;
+        if (!scrollViewElement) return 0;
+
+        return scrollViewElement.getScrollPosition();
+      },
+      scrollToPosition: (y: number) => {
+        const scrollViewElement = scrollView.current;
+        if (!scrollViewElement) return;
+
+        scrollViewElement.scrollToPosition(y);
+      },
+    }));
+
+    const getImagePreviewStyle = (assetShortHeader: Asset) => {
+      return {
+        ...styles.previewImage,
+        imageRendering: isPixelArt(assetShortHeader)
+          ? getPixelatedImageRendering()
+          : undefined,
+      };
+    };
+
+    const loadAsset = React.useCallback(
+      () => {
+        (async () => {
+          try {
+            // Reinitialise asset to trigger a loader and recalculate all parameters. (for instance zoom)
+            setAsset(null);
+            const loadedAsset = isAssetPrivate
+              ? await fetchPrivateAsset(assetShortHeader, {
+                  environment,
+                })
+              : await getPublicAsset(assetShortHeader, {
+                  environment,
+                });
+            if (!loadedAsset) {
+              console.error('Cannot load private asset');
+              throw new Error('Cannot load private asset');
+            }
+            setAsset(loadedAsset);
+
+            if (loadedAsset.objectType === 'sprite') {
+              // Only sprites have animations and we select the first one.
+              const firstAnimationName =
+                loadedAsset.objectAssets[0].object.animations[0].name;
+              setSelectedAnimationName(firstAnimationName);
+            }
+          } catch (error) {
+            console.error('Error while loading asset:', error);
+            setError(error);
+          }
+          onAssetLoaded && onAssetLoaded();
+        })();
+      },
+      [
+        onAssetLoaded,
+        isAssetPrivate,
+        fetchPrivateAsset,
+        assetShortHeader,
+        environment,
+      ]
+    );
+
+    const isImageResourceSmooth = React.useMemo(
+      () => !isPixelArt(assetShortHeader),
+      [assetShortHeader]
+    );
+
+    React.useEffect(
+      () => {
+        if (!asset) {
+          loadAsset();
         }
-      })();
-    },
-    [assetShortHeader]
-  );
+      },
+      [asset, loadAsset]
+    );
 
-  React.useEffect(
-    () => {
-      loadAsset();
-    },
-    [loadAsset]
-  );
+    const loadAuthorPublicProfiles = React.useCallback(
+      async () => {
+        try {
+          const authorIds: Array<string> = (asset && asset.authorIds) || [];
+          if (authorIds.length === 0) return;
+          const userPublicProfileByIds = await getUserPublicProfilesByIds(
+            authorIds
+          );
+          const userPublicProfiles = Object.keys(userPublicProfileByIds).map(
+            id => userPublicProfileByIds[id]
+          );
+          setAuthorPublicProfiles(userPublicProfiles);
+        } catch (error) {
+          // Catch error, but don't display it to the user.
+          console.error('Error while loading author public profiles:', error);
+        }
+      },
+      [asset]
+    );
 
-  const canAddAsset = canInstall && !isBeingInstalled && !!asset;
-  const onAddAsset = React.useCallback(
-    () => {
-      if (canAddAsset) onAdd();
-    },
-    [onAdd, canAddAsset]
-  );
+    React.useEffect(
+      () => {
+        loadAuthorPublicProfiles();
+      },
+      [loadAuthorPublicProfiles]
+    );
 
-  const assetAuthors: ?Array<Author> =
-    asset && authors
-      ? asset.authors
-          .map(authorName => {
-            return authors.find(({ name }) => name === authorName);
-          })
-          .filter(Boolean)
-      : [];
-  const assetLicense =
-    asset && licenses
-      ? licenses.find(({ name }) => name === asset.license)
+    const assetAuthors: ?Array<Author> =
+      asset && authors
+        ? asset.authors
+            .map(authorName => {
+              return authors.find(({ name }) => name === authorName);
+            })
+            .filter(Boolean)
+        : [];
+    const areAuthorsLoading =
+      !asset || // Asset not loaded.
+      (asset.authors.length > 0 && !authors) || // Authors not loaded.
+      (asset.authorIds && // User public profiles not loaded.
+        authorPublicProfiles.length > 0 &&
+        authorPublicProfiles.length === 0);
+
+    const assetLicense =
+      asset && licenses
+        ? licenses.find(({ name }) => name === asset.license)
+        : null;
+
+    // For sprite animations.
+    const assetResources =
+      asset && asset.objectAssets[0]
+        ? getObjectAssetResourcesByName(asset.objectAssets[0])
+        : {};
+    const assetAnimations = asset
+      ? asset.objectAssets[0].object.animations
       : null;
+    const animation = assetAnimations
+      ? assetAnimations.find(({ name }) => name === selectedAnimationName)
+      : null;
+    const direction = animation ? animation.directions[0] : null;
+    const animationResources =
+      asset && direction
+        ? direction.sprites.map(sprite => assetResources[sprite.image])
+        : null;
 
-  return (
-    <Dialog
-      open
-      title={<Trans>Add an object from the store</Trans>}
-      onRequestClose={onClose}
-      actions={[
-        <FlatButton key="back" label={<Trans>Back</Trans>} onClick={onClose} />,
-        <LeftLoader
-          isLoading={isBeingInstalled || (!asset && !error)}
-          key="install"
-        >
-          <RaisedButton
-            primary
-            icon={<Add />}
-            label={<Trans>Add to the game</Trans>}
-            onClick={onAddAsset}
-            disabled={!canAddAsset}
-          />
-        </LeftLoader>,
-      ]}
-      onApply={onAddAsset}
-    >
-      <Column expand noMargin>
-        <ResponsiveLineStackLayout noMargin>
-          <ResponsiveWindowMeasurer>
-            {windowWidth => (
-              <div
-                style={{
-                  ...styles.previewBackground,
-                  ...(windowWidth === 'small'
-                    ? styles.horizontalPreviewBackground
-                    : styles.verticalPreviewBackground),
-                }}
-              >
-                <CheckeredBackground />
-                <CorsAwareImage
-                  style={{
-                    ...styles.previewImage,
-                    ...(isPixelArt(assetShortHeader)
-                      ? styles.previewImagePixelated
-                      : undefined),
-                  }}
-                  src={assetShortHeader.previewImageUrls[0]}
-                  alt={assetShortHeader.name}
-                />
-              </div>
-            )}
-          </ResponsiveWindowMeasurer>
-          <Column expand>
-            <div>
-              <Text size="title" displayInlineAsSpan>
-                {assetShortHeader.name}
-              </Text>{' '}
-              {assetShortHeader.shortDescription && (
+    const similarAssetFilters = React.useMemo(
+      () => [new SimilarAssetStoreSearchFilter(assetShortHeader)],
+      [assetShortHeader]
+    );
+    const searchResults = useSearchItem('', null, null, similarAssetFilters);
+    const truncatedSearchResults = searchResults && searchResults.slice(0, 60);
+
+    return (
+      <ScrollView ref={scrollView}>
+        <Column expand noMargin>
+          <Line justifyContent="space-between" noMargin>
+            <Column>
+              <LineStackLayout alignItems="baseline" noMargin>
+                <Text size="block-title" displayInlineAsSpan>
+                  {assetShortHeader.name}
+                </Text>
+                {!areAuthorsLoading && (
+                  <LineStackLayout noMargin>
+                    <Text size="body">
+                      <Trans>by</Trans>
+                    </Text>
+                    {!!assetAuthors &&
+                      assetAuthors.map(author => (
+                        <Text size="body" key={author.name}>
+                          <Link
+                            key={author.name}
+                            href={author.website}
+                            onClick={() =>
+                              Window.openExternalURL(author.website)
+                            }
+                          >
+                            {author.name}
+                          </Link>
+                        </Text>
+                      ))}
+                    {!!authorPublicProfiles.length &&
+                      authorPublicProfiles.map(userPublicProfile => {
+                        const username =
+                          userPublicProfile.username || 'GDevelop user';
+                        return (
+                          <Text size="body" key={userPublicProfile.id}>
+                            <Link
+                              key={userPublicProfile.id}
+                              href="#"
+                              onClick={() =>
+                                setSelectedAuthorPublicProfile(
+                                  userPublicProfile
+                                )
+                              }
+                            >
+                              {username}
+                            </Link>
+                          </Text>
+                        );
+                      })}
+                  </LineStackLayout>
+                )}
+              </LineStackLayout>
+              <Line alignItems="center">
+                <div style={{ flexWrap: 'wrap' }}>
+                  {assetShortHeader.tags.slice(0, 5).map((tag, index) => (
+                    <React.Fragment key={tag}>
+                      {index !== 0 && <Spacer />}
+                      <Chip
+                        size="small"
+                        style={styles.chip}
+                        label={makeFirstLetterUppercase(tag)}
+                        onClick={() => {
+                          onTagSelection(tag);
+                        }}
+                      />
+                    </React.Fragment>
+                  ))}
+                  {assetShortHeader.tags.length > 5 && (
+                    <>
+                      <Spacer />
+                      <Chip
+                        size="small"
+                        style={styles.chip}
+                        label={
+                          <Trans>
+                            + {assetShortHeader.tags.length - 5} tag(s)
+                          </Trans>
+                        }
+                      />
+                    </>
+                  )}
+                </div>
+              </Line>
+            </Column>
+          </Line>
+          <ResponsiveLineStackLayout noMargin>
+            <Column>
+              {asset ? (
+                <>
+                  {asset.objectType === 'sprite' &&
+                  animationResources &&
+                  typeof selectedAnimationName === 'string' && // Animation name can be empty string.
+                    direction && (
+                      <AnimationPreview
+                        animationName={selectedAnimationName}
+                        resourceNames={animationResources.map(
+                          ({ name }) => name
+                        )}
+                        getImageResourceSource={(resourceName: string) => {
+                          const resource = assetResources[resourceName];
+                          return resource ? resource.file : '';
+                        }}
+                        isImageResourceSmooth={() => isImageResourceSmooth}
+                        timeBetweenFrames={direction.timeBetweenFrames}
+                        isLooping // Always loop in the asset store.
+                        hideCheckeredBackground
+                        deactivateControls
+                        displaySpacedView
+                        fixedHeight={FIXED_HEIGHT}
+                        fixedWidth={FIXED_WIDTH}
+                        isAssetPrivate={isAssetPrivate}
+                      />
+                    )}
+                  {asset.objectType !== 'sprite' && (
+                    <div style={styles.previewBackground}>
+                      {isAssetPrivate ? (
+                        <AuthorizedAssetImage
+                          style={getImagePreviewStyle(asset)}
+                          url={asset.previewImageUrls[0]}
+                          alt={asset.name}
+                        />
+                      ) : (
+                        <CorsAwareImage
+                          style={getImagePreviewStyle(asset)}
+                          src={asset.previewImageUrls[0]}
+                          alt={asset.name}
+                        />
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={styles.previewBackground}>
+                  <PlaceholderLoader />
+                </div>
+              )}
+              {assetAnimations &&
+                assetAnimations.length > 1 &&
+                typeof selectedAnimationName === 'string' && (
+                  <Paper elevation={4} variant="outlined" background="dark">
+                    <Line justifyContent="center" alignItems="center" noMargin>
+                      <div style={styles.arrowContainer}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            const previousAnimationIndex = assetAnimations.findIndex(
+                              ({ name }) => name === selectedAnimationName
+                            );
+                            const newAnimationIndex =
+                              previousAnimationIndex === 0
+                                ? assetAnimations.length - 1
+                                : previousAnimationIndex - 1;
+                            setSelectedAnimationName(
+                              assetAnimations[newAnimationIndex].name
+                            );
+                          }}
+                        >
+                          <ArrowLeft />
+                        </IconButton>
+                      </div>
+
+                      <SelectField
+                        value={selectedAnimationName}
+                        onChange={(e, i, newAnimationName: string) => {
+                          setSelectedAnimationName(newAnimationName);
+                        }}
+                        fullWidth
+                        textAlign="center"
+                        disableUnderline
+                      >
+                        {assetAnimations.map(animation => {
+                          const isAnimationNameEmpty = !animation.name;
+                          return (
+                            <SelectOption
+                              key={animation.name}
+                              value={animation.name}
+                              label={
+                                !isAnimationNameEmpty
+                                  ? makeFirstLetterUppercase(animation.name)
+                                  : t`Default` // Display default for animations with no name.
+                              }
+                              shouldNotTranslate={!isAnimationNameEmpty}
+                            />
+                          );
+                        })}
+                      </SelectField>
+                      <div style={styles.arrowContainer}>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            const previousAnimationIndex = assetAnimations.findIndex(
+                              ({ name }) => name === selectedAnimationName
+                            );
+                            const newAnimationIndex =
+                              previousAnimationIndex ===
+                              assetAnimations.length - 1
+                                ? 0
+                                : previousAnimationIndex + 1;
+                            setSelectedAnimationName(
+                              assetAnimations[newAnimationIndex].name
+                            );
+                          }}
+                        >
+                          <ArrowRight />
+                        </IconButton>
+                      </div>
+                    </Line>
+                  </Paper>
+                )}
+            </Column>
+            <Column expand>
+              {asset ? (
                 <React.Fragment>
-                  -{' '}
+                  <Text size="body">
+                    {!!assetLicense && (
+                      <Trans>
+                        Type of License:{' '}
+                        {
+                          <Link
+                            href={assetLicense.website}
+                            onClick={() =>
+                              Window.openExternalURL(assetLicense.website)
+                            }
+                          >
+                            {assetLicense.name}
+                          </Link>
+                        }
+                      </Trans>
+                    )}
+                  </Text>
                   <Text size="body" displayInlineAsSpan>
-                    {assetShortHeader.shortDescription}
+                    <MarkdownText source={asset.description} allowParagraphs />
                   </Text>
                 </React.Fragment>
+              ) : error ? (
+                <PlaceholderError onRetry={loadAsset}>
+                  <Trans>
+                    Error while loading the asset. Verify your internet
+                    connection or try again later.
+                  </Trans>
+                </PlaceholderError>
+              ) : (
+                <PlaceholderLoader />
               )}
-            </div>
-            <span>
-              {assetShortHeader.tags.map(tag => (
-                <Chip size="small" style={styles.chip} label={tag} key={tag} />
-              ))}
-            </span>
-            {asset ? (
-              <React.Fragment>
-                <Text size="body">
-                  <Trans>By:</Trans>{' '}
-                  {!!assetAuthors &&
-                    assetAuthors.map(author => {
-                      return (
-                        <Link
-                          key={author.name}
-                          component="button"
-                          onClick={() => {
-                            Window.openExternalURL(author.website);
-                          }}
-                        >
-                          {author.name}
-                        </Link>
-                      );
-                    })}
+            </Column>
+          </ResponsiveLineStackLayout>
+          {asset && (
+            <Column expand>
+              <Spacer />
+              <Line noMargin>
+                <Text size="block-title" displayInlineAsSpan>
+                  <Trans>You might like</Trans>
                 </Text>
-                <Text size="body">
-                  {!!assetLicense && (
-                    <Trans>
-                      License:{' '}
-                      {
-                        <Link
-                          component="button"
-                          onClick={() => {
-                            Window.openExternalURL(assetLicense.website);
-                          }}
-                        >
-                          {assetLicense.name}
-                        </Link>
-                      }
-                    </Trans>
-                  )}
-                </Text>
-                <Text size="body">{asset.description}</Text>
-              </React.Fragment>
-            ) : error ? (
-              <PlaceholderError onRetry={loadAsset}>
-                <Trans>
-                  Error while loading the asset. Verify your internet connection
-                  or try again later.
-                </Trans>
-              </PlaceholderError>
-            ) : (
-              <PlaceholderLoader />
-            )}
-          </Column>
-        </ResponsiveLineStackLayout>
-      </Column>
-    </Dialog>
-  );
-};
+              </Line>
+              <Line expand noMargin justifyContent="center">
+                <AssetsList
+                  assetShortHeaders={truncatedSearchResults}
+                  onOpenDetails={assetShortHeader => {
+                    setAsset(null);
+                    onOpenDetails(assetShortHeader);
+                  }}
+                  noScroll
+                  noResultsPlaceHolder={
+                    <Line alignItems="flex-start">
+                      <EmptyMessage>
+                        <Trans>No similar asset was found.</Trans>
+                      </EmptyMessage>
+                    </Line>
+                  }
+                  error={filterError}
+                />
+              </Line>
+            </Column>
+          )}
+          {selectedAuthorPublicProfile && (
+            <PublicProfileDialog
+              userId={selectedAuthorPublicProfile.id}
+              onClose={() => setSelectedAuthorPublicProfile(null)}
+              onAssetPackOpen={assetPack => {
+                onPrivateAssetPackSelection(assetPack);
+                setSelectedAuthorPublicProfile(null);
+              }}
+              onGameTemplateOpen={gameTemplate => {
+                onPrivateGameTemplateSelection(gameTemplate);
+                setSelectedAuthorPublicProfile(null);
+              }}
+            />
+          )}
+        </Column>
+      </ScrollView>
+    );
+  }
+);

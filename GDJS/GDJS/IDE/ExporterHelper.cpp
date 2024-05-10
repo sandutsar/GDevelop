@@ -9,6 +9,7 @@
 #include <emscripten.h>
 #endif
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <functional>
 #include <sstream>
@@ -22,10 +23,14 @@
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Extensions/PlatformExtension.h"
 #include "GDCore/IDE/AbstractFileSystem.h"
+#include "GDCore/IDE/Events/UsedExtensionsFinder.h"
 #include "GDCore/IDE/ExportedDependencyResolver.h"
 #include "GDCore/IDE/Project/ProjectResourcesCopier.h"
+#include "GDCore/IDE/Project/SceneResourcesFinder.h"
 #include "GDCore/IDE/ProjectStripper.h"
 #include "GDCore/IDE/SceneNameMangler.h"
+#include "GDCore/Project/EventsBasedObject.h"
+#include "GDCore/Project/EventsFunctionsExtension.h"
 #include "GDCore/Project/ExternalEvents.h"
 #include "GDCore/Project/ExternalLayout.h"
 #include "GDCore/Project/Layout.h"
@@ -65,6 +70,29 @@ static void InsertUnique(std::vector<gd::String> &container, gd::String str) {
     container.push_back(str);
 }
 
+static gd::String CleanProjectName(gd::String projectName) {
+  gd::String partiallyCleanedProjectName = projectName;
+
+  static const gd::String forbiddenFileNameCharacters =
+      "\\/:*?\"<>|";  // See
+                      // https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+
+  for (size_t i = 0; i < partiallyCleanedProjectName.size();) {
+    // Delete all characters that are not allowed in a filename
+    if (forbiddenFileNameCharacters.find(partiallyCleanedProjectName[i]) !=
+        gd::String::npos) {
+      partiallyCleanedProjectName.erase(i, 1);
+    } else {
+      i++;
+    }
+  }
+
+  if (partiallyCleanedProjectName.empty())
+    partiallyCleanedProjectName = "Project";
+
+  return partiallyCleanedProjectName;
+}
+
 ExporterHelper::ExporterHelper(gd::AbstractFileSystem &fileSystem,
                                gd::String gdjsRoot_,
                                gd::String codeOutputDir_)
@@ -76,14 +104,31 @@ bool ExporterHelper::ExportProjectForPixiPreview(
   fs.MkDir(options.exportPath);
   fs.ClearDir(options.exportPath);
   std::vector<gd::String> includesFiles;
+  std::vector<gd::String> resourcesFiles;
 
+  // TODO Try to remove side effects to avoid the copy
+  // that destroys the AST in cache.
   gd::Project exportedProject = options.project;
+  const gd::Project &immutableProject = exportedProject;
 
-  if (!options.fullLoadingScreen) {
+  if (options.fullLoadingScreen) {
+    // Use project properties fallback to set empty properties
+    if (exportedProject.GetAuthorIds().empty() &&
+        !options.fallbackAuthorId.empty()) {
+      exportedProject.GetAuthorIds().push_back(options.fallbackAuthorId);
+    }
+    if (exportedProject.GetAuthorUsernames().empty() &&
+        !options.fallbackAuthorUsername.empty()) {
+      exportedProject.GetAuthorUsernames().push_back(
+          options.fallbackAuthorUsername);
+    }
+  } else {
     // Most of the time, we skip the logo and minimum duration so that
     // the preview start as soon as possible.
-    exportedProject.GetLoadingScreen().ShowGDevelopSplash(false);
-    exportedProject.GetLoadingScreen().SetMinDuration(0);
+    exportedProject.GetLoadingScreen()
+        .ShowGDevelopLogoDuringLoadingScreen(false)
+        .SetMinDuration(0);
+    exportedProject.GetWatermark().ShowGDevelopWatermark(false);
   }
 
   // Export resources (*before* generating events as some resources filenames
@@ -99,17 +144,26 @@ bool ExporterHelper::ExportProjectForPixiPreview(
       fs, exportedProject.GetResourcesManager(), options.exportPath);
   // end of compatibility code
 
+  auto usedExtensionsResult =
+      gd::UsedExtensionsFinder::ScanProject(exportedProject);
+
   // Export engine libraries
   AddLibsInclude(/*pixiRenderers=*/true,
+                 usedExtensionsResult.Has3DObjects(),
                  /*includeWebsocketDebuggerClient=*/
                  !options.websocketDebuggerServerAddress.empty(),
                  /*includeWindowMessageDebuggerClient=*/
                  options.useWindowMessageDebuggerClient,
-                 exportedProject.GetLoadingScreen().GetGDevelopLogoStyle(),
+                 immutableProject.GetLoadingScreen().GetGDevelopLogoStyle(),
                  includesFiles);
 
-  // Export files for object and behaviors
-  ExportObjectAndBehaviorsIncludes(exportedProject, includesFiles);
+  // Export files for free function, object and behaviors
+  for (const auto &includeFile : usedExtensionsResult.GetUsedIncludeFiles()) {
+    InsertUnique(includesFiles, includeFile);
+  }
+  for (const auto &requiredFile : usedExtensionsResult.GetUsedRequiredFiles()) {
+    InsertUnique(resourcesFiles, requiredFile);
+  }
 
   // Export effects (after engine libraries as they auto-register themselves to
   // the engine)
@@ -119,12 +173,12 @@ bool ExporterHelper::ExportProjectForPixiPreview(
 
   if (!options.projectDataOnlyExport) {
     // Generate events code
-    if (!ExportEventsCode(exportedProject, codeOutputDir, includesFiles, true))
+    if (!ExportEventsCode(immutableProject, codeOutputDir, includesFiles, true))
       return false;
 
     // Export source files
     if (!ExportExternalSourceFiles(
-            exportedProject, codeOutputDir, includesFiles)) {
+            immutableProject, codeOutputDir, includesFiles)) {
       gd::LogError(
           _("Error during exporting! Unable to export source files:\n") +
           lastError);
@@ -132,6 +186,17 @@ bool ExporterHelper::ExportProjectForPixiPreview(
     }
 
     previousTime = LogTimeSpent("Events code export", previousTime);
+  }
+
+  auto projectUsedResources =
+      gd::SceneResourcesFinder::FindProjectResources(exportedProject);
+  std::unordered_map<gd::String, std::set<gd::String>> scenesUsedResources;
+  for (std::size_t layoutIndex = 0;
+       layoutIndex < exportedProject.GetLayoutsCount(); layoutIndex++) {
+    auto &layout = exportedProject.GetLayout(layoutIndex);
+    scenesUsedResources[layout.GetName()] =
+        gd::SceneResourcesFinder::FindSceneResources(exportedProject,
+                                                          layout);
   }
 
   // Strip the project (*after* generating events as the events may use stripped
@@ -154,6 +219,17 @@ bool ExporterHelper::ExportProjectForPixiPreview(
       .SetStringValue(options.websocketDebuggerServerAddress);
   runtimeGameOptions.AddChild("websocketDebuggerServerPort")
       .SetStringValue(options.websocketDebuggerServerPort);
+  runtimeGameOptions.AddChild("electronRemoteRequirePath")
+      .SetStringValue(options.electronRemoteRequirePath);
+  if (options.isDevelopmentEnvironment) {
+    runtimeGameOptions.AddChild("environment").SetStringValue("dev");
+  }
+  if (!options.gdevelopResourceToken.empty()) {
+    runtimeGameOptions.AddChild("gdevelopResourceToken")
+        .SetStringValue(options.gdevelopResourceToken);
+  }
+  runtimeGameOptions.AddChild("allowAuthenticationUsingIframeForPreview")
+      .SetBoolValue(options.allowAuthenticationUsingIframeForPreview);
 
   // Pass in the options the list of scripts files - useful for hot-reloading.
   auto &scriptFilesElement = runtimeGameOptions.AddChild("scriptFiles");
@@ -170,14 +246,16 @@ bool ExporterHelper::ExportProjectForPixiPreview(
   }
 
   // Export the project
-  ExportProjectData(
-      fs, exportedProject, codeOutputDir + "/data.js", runtimeGameOptions);
+  ExportProjectData(fs, exportedProject, codeOutputDir + "/data.js",
+                    runtimeGameOptions, projectUsedResources,
+                    scenesUsedResources);
   includesFiles.push_back(codeOutputDir + "/data.js");
 
   previousTime = LogTimeSpent("Project data export", previousTime);
 
   // Copy all the dependencies and their source maps
   ExportIncludesAndLibs(includesFiles, options.exportPath, true);
+  ExportIncludesAndLibs(resourcesFiles, options.exportPath, true);
 
   // Create the index file
   if (!ExportPixiIndexFile(exportedProject,
@@ -194,14 +272,17 @@ bool ExporterHelper::ExportProjectForPixiPreview(
 
 gd::String ExporterHelper::ExportProjectData(
     gd::AbstractFileSystem &fs,
-    const gd::Project &project,
+    gd::Project &project,
     gd::String filename,
-    const gd::SerializerElement &runtimeGameOptions) {
+    const gd::SerializerElement &runtimeGameOptions,
+    std::set<gd::String> &projectUsedResources,
+    std::unordered_map<gd::String, std::set<gd::String>> &scenesUsedResources) {
   fs.MkDir(fs.DirNameFrom(filename));
 
   // Save the project to JSON
   gd::SerializerElement rootElement;
   project.SerializeTo(rootElement);
+  SerializeUsedResources(rootElement, projectUsedResources, scenesUsedResources);
   gd::String output =
       "gdjs.projectData = " + gd::Serializer::ToJSON(rootElement) + ";\n" +
       "gdjs.runtimeGameOptions = " +
@@ -210,6 +291,35 @@ gd::String ExporterHelper::ExportProjectData(
   if (!fs.WriteToFile(filename, output)) return "Unable to write " + filename;
 
   return "";
+}
+
+void ExporterHelper::SerializeUsedResources(
+    gd::SerializerElement &rootElement,
+    std::set<gd::String> &projectUsedResources,
+    std::unordered_map<gd::String, std::set<gd::String>> &scenesUsedResources) {
+
+  auto serializeUsedResources =
+      [](gd::SerializerElement &element,
+         std::set<gd::String> &usedResources) -> void {
+    auto &resourcesElement = element.AddChild("usedResources");
+    resourcesElement.ConsiderAsArrayOf("resourceReference");
+    for (auto &resourceName : usedResources) {
+      auto &resourceElement = resourcesElement.AddChild("resourceReference");
+      resourceElement.SetAttribute("name", resourceName);
+    }
+  };
+
+  serializeUsedResources(rootElement, projectUsedResources);
+
+  auto &layoutsElement = rootElement.GetChild("layouts");
+  for (std::size_t layoutIndex = 0;
+       layoutIndex < layoutsElement.GetChildrenCount(); layoutIndex++) {
+    auto &layoutElement = layoutsElement.GetChild(layoutIndex);
+    const auto layoutName = layoutElement.GetStringAttribute("name");
+
+    auto &layoutUsedResources = scenesUsedResources[layoutName];
+    serializeUsedResources(layoutElement, layoutUsedResources);
+  }
 }
 
 bool ExporterHelper::ExportPixiIndexFile(
@@ -268,6 +378,24 @@ bool ExporterHelper::ExportCordovaFiles(const gd::Project &project,
                                   : "";
     }
 
+    // Splashscreen icon for Android 12+.
+    gd::String splashScreenIconFilename =
+        getIconFilename("android", "windowSplashScreenAnimatedIcon");
+    if (!splashScreenIconFilename.empty())
+      output +=
+          "<preference name=\"AndroidWindowSplashScreenAnimatedIcon\" "
+          "value=\"" +
+          splashScreenIconFilename + "\" />\n";
+
+    // Splashscreen "branding" image for Android 12+.
+    gd::String splashScreenBrandingImageFilename =
+        getIconFilename("android", "windowSplashScreenBrandingImage");
+    if (!splashScreenBrandingImageFilename.empty())
+      output +=
+          "<preference name=\"AndroidWindowSplashScreenBrandingImage\" "
+          "value=\"" +
+          splashScreenBrandingImageFilename + "\" />\n";
+
     return output;
   };
 
@@ -287,10 +415,28 @@ bool ExporterHelper::ExportCordovaFiles(const gd::Project &project,
     return output;
   };
 
+  auto makeProjectNameXcodeSafe = [](const gd::String &projectName) {
+    // Avoid App Store Connect STATE_ERROR.VALIDATION_ERROR.90121 error, when
+    // "CFBundleExecutable Info.plist key contains [...] any of the following
+    // unsupported characters: \ [ ] { } ( ) + *".
+
+    // Remove \ [ ] { } ( ) + * from the project name.
+    return projectName.FindAndReplace("\\", "")
+        .FindAndReplace("[", "")
+        .FindAndReplace("]", "")
+        .FindAndReplace("{", "")
+        .FindAndReplace("}", "")
+        .FindAndReplace("(", "")
+        .FindAndReplace(")", "")
+        .FindAndReplace("+", "")
+        .FindAndReplace("*", "");
+  };
+
   gd::String str =
       fs.ReadFile(gdjsRoot + "/Runtime/Cordova/config.xml")
           .FindAndReplace("GDJS_PROJECTNAME",
-                          gd::Serializer::ToEscapedXMLString(project.GetName()))
+                          gd::Serializer::ToEscapedXMLString(
+                              makeProjectNameXcodeSafe(project.GetName())))
           .FindAndReplace(
               "GDJS_PACKAGENAME",
               gd::Serializer::ToEscapedXMLString(project.GetPackageName()))
@@ -367,6 +513,16 @@ bool ExporterHelper::ExportCordovaFiles(const gd::Project &project,
     }
   }
 
+  {
+    gd::String str =
+        fs.ReadFile(gdjsRoot + "/Runtime/Cordova/www/LICENSE.GDevelop.txt");
+
+    if (!fs.WriteToFile(exportDir + "/www/LICENSE.GDevelop.txt", str)) {
+      lastError = "Unable to write Cordova LICENSE.GDevelop.txt file.";
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -391,6 +547,27 @@ bool ExporterHelper::ExportFacebookInstantGamesFiles(const gd::Project &project,
   return true;
 }
 
+bool ExporterHelper::ExportHtml5Files(const gd::Project &project,
+                                                     gd::String exportDir) {
+  if (!fs.WriteToFile(exportDir + "/manifest.webmanifest",
+                      GenerateWebManifest(project))) {
+    lastError = "Unable to export WebManifest.";
+    return false;
+  }
+
+  {
+    gd::String str =
+        fs.ReadFile(gdjsRoot + "/Runtime/Electron/LICENSE.GDevelop.txt");
+
+    if (!fs.WriteToFile(exportDir + "/LICENSE.GDevelop.txt", str)) {
+      lastError = "Unable to write LICENSE.GDevelop.txt file.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool ExporterHelper::ExportElectronFiles(const gd::Project &project,
                                          gd::String exportDir,
                                          std::set<gd::String> usedExtensions) {
@@ -407,11 +584,15 @@ bool ExporterHelper::ExportElectronFiles(const gd::Project &project,
                                 ->GetMangledSceneName(project.GetName())
                                 .LowerCase()
                                 .FindAndReplace(" ", "-")));
+  // It's important to clean the project name from special characters,
+  // otherwise Windows executable may be corrupted when electron builds it.
+  gd::String jsonCleanedName = gd::Serializer::ToJSON(
+      gd::SerializerElement(CleanProjectName(project.GetName())));
 
   {
     gd::String str =
         fs.ReadFile(gdjsRoot + "/Runtime/Electron/package.json")
-            .FindAndReplace("\"GDJS_GAME_NAME\"", jsonName)
+            .FindAndReplace("\"GDJS_GAME_NAME\"", jsonCleanedName)
             .FindAndReplace("\"GDJS_GAME_PACKAGE_NAME\"", jsonPackageName)
             .FindAndReplace("\"GDJS_GAME_AUTHOR\"", jsonAuthor)
             .FindAndReplace("\"GDJS_GAME_VERSION\"", jsonVersion)
@@ -439,12 +620,7 @@ bool ExporterHelper::ExportElectronFiles(const gd::Project &project,
                   dependency.GetVersion() + "\",";
     }
 
-    if (!packages.empty()) {
-      // Remove the , at the end as last item cannot have , in JSON.
-      packages = packages.substr(0, packages.size() - 1);
-    }
-
-    str = str.FindAndReplace("\"GDJS_EXTENSION_NPM_DEPENDENCY\": \"0\"",
+    str = str.FindAndReplace("\"GDJS_EXTENSION_NPM_DEPENDENCY\": \"0\",",
                              packages);
 
     if (!fs.WriteToFile(exportDir + "/package.json", str)) {
@@ -466,6 +642,16 @@ bool ExporterHelper::ExportElectronFiles(const gd::Project &project,
 
     if (!fs.WriteToFile(exportDir + "/main.js", str)) {
       lastError = "Unable to write Electron main.js file.";
+      return false;
+    }
+  }
+
+  {
+    gd::String str =
+        fs.ReadFile(gdjsRoot + "/Runtime/Electron/LICENSE.GDevelop.txt");
+
+    if (!fs.WriteToFile(exportDir + "/LICENSE.GDevelop.txt", str)) {
+      lastError = "Unable to write Electron LICENSE.GDevelop.txt file.";
       return false;
     }
   }
@@ -524,6 +710,7 @@ bool ExporterHelper::CompleteIndexFile(
 }
 
 void ExporterHelper::AddLibsInclude(bool pixiRenderers,
+                                    bool pixiInThreeRenderers,
                                     bool includeWebsocketDebuggerClient,
                                     bool includeWindowMessageDebuggerClient,
                                     gd::String gdevelopLogoStyle,
@@ -534,23 +721,36 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
   InsertUnique(includesFiles, "logger.js");
   InsertUnique(includesFiles, "gd.js");
   InsertUnique(includesFiles, "libs/rbush.js");
+  InsertUnique(includesFiles, "AsyncTasksManager.js");
   InsertUnique(includesFiles, "inputmanager.js");
   InsertUnique(includesFiles, "jsonmanager.js");
+  InsertUnique(includesFiles, "Model3DManager.js");
+  InsertUnique(includesFiles, "ResourceLoader.js");
+  InsertUnique(includesFiles, "ResourceCache.js");
   InsertUnique(includesFiles, "timemanager.js");
+  InsertUnique(includesFiles, "polygon.js");
   InsertUnique(includesFiles, "runtimeobject.js");
   InsertUnique(includesFiles, "profiler.js");
+  InsertUnique(includesFiles, "RuntimeInstanceContainer.js");
   InsertUnique(includesFiles, "runtimescene.js");
   InsertUnique(includesFiles, "scenestack.js");
-  InsertUnique(includesFiles, "polygon.js");
   InsertUnique(includesFiles, "force.js");
+  InsertUnique(includesFiles, "RuntimeLayer.js");
   InsertUnique(includesFiles, "layer.js");
+  InsertUnique(includesFiles, "RuntimeCustomObjectLayer.js");
   InsertUnique(includesFiles, "timer.js");
+  InsertUnique(includesFiles, "runtimewatermark.js");
   InsertUnique(includesFiles, "runtimegame.js");
   InsertUnique(includesFiles, "variable.js");
   InsertUnique(includesFiles, "variablescontainer.js");
   InsertUnique(includesFiles, "oncetriggers.js");
   InsertUnique(includesFiles, "runtimebehavior.js");
+  InsertUnique(includesFiles, "SpriteAnimator.js");
   InsertUnique(includesFiles, "spriteruntimeobject.js");
+  InsertUnique(includesFiles, "affinetransformation.js");
+  InsertUnique(includesFiles, "CustomRuntimeObjectInstanceContainer.js");
+  InsertUnique(includesFiles, "CustomRuntimeObject.js");
+  InsertUnique(includesFiles, "CustomRuntimeObject2D.js");
 
   // Common includes for events only.
   InsertUnique(includesFiles, "events-tools/commontools.js");
@@ -578,6 +778,7 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
   if (includeWebsocketDebuggerClient || includeWindowMessageDebuggerClient) {
     InsertUnique(includesFiles, "debugger-client/hot-reloader.js");
     InsertUnique(includesFiles, "debugger-client/abstract-debugger-client.js");
+    InsertUnique(includesFiles, "debugger-client/InGameDebugger.js");
   }
   if (includeWebsocketDebuggerClient) {
     InsertUnique(includesFiles, "debugger-client/websocket-debugger-client.js");
@@ -587,6 +788,12 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
                  "debugger-client/window-message-debugger-client.js");
   }
 
+  if (pixiInThreeRenderers) {
+    InsertUnique(includesFiles, "pixi-renderers/three.js");
+    InsertUnique(includesFiles, "pixi-renderers/ThreeAddons.js");
+    InsertUnique(includesFiles, "pixi-renderers/draco/gltf/draco_decoder.wasm");
+    InsertUnique(includesFiles, "pixi-renderers/draco/gltf/draco_wasm_wrapper.js");
+  }
   if (pixiRenderers) {
     InsertUnique(includesFiles, "pixi-renderers/pixi.js");
     InsertUnique(includesFiles, "pixi-renderers/pixi-filters-tools.js");
@@ -597,6 +804,8 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
     InsertUnique(includesFiles, "pixi-renderers/pixi-bitmapfont-manager.js");
     InsertUnique(includesFiles,
                  "pixi-renderers/spriteruntimeobject-pixi-renderer.js");
+    InsertUnique(includesFiles, "pixi-renderers/CustomRuntimeObject2DPixiRenderer.js");
+    InsertUnique(includesFiles, "pixi-renderers/DebuggerPixiRenderer.js");
     InsertUnique(includesFiles,
                  "pixi-renderers/loadingscreen-pixi-renderer.js");
     InsertUnique(includesFiles, "pixi-renderers/pixi-effects-manager.js");
@@ -607,6 +816,12 @@ void ExporterHelper::AddLibsInclude(bool pixiRenderers,
     InsertUnique(
         includesFiles,
         "fontfaceobserver-font-manager/fontfaceobserver-font-manager.js");
+  }
+  if (pixiInThreeRenderers) {
+    InsertUnique(includesFiles, "Extensions/3D/A_RuntimeObject3D.js");
+    InsertUnique(includesFiles, "Extensions/3D/A_RuntimeObject3DRenderer.js");
+    InsertUnique(includesFiles, "Extensions/3D/CustomRuntimeObject3D.js");
+    InsertUnique(includesFiles, "Extensions/3D/CustomRuntimeObject3DRenderer.js");
   }
 }
 
@@ -636,7 +851,7 @@ bool ExporterHelper::ExportEffectIncludes(
   return true;
 }
 
-bool ExporterHelper::ExportEventsCode(gd::Project &project,
+bool ExporterHelper::ExportEventsCode(const gd::Project &project,
                                       gd::String outputDir,
                                       std::vector<gd::String> &includesFiles,
                                       bool exportForPreview) {
@@ -644,7 +859,7 @@ bool ExporterHelper::ExportEventsCode(gd::Project &project,
 
   for (std::size_t i = 0; i < project.GetLayoutsCount(); ++i) {
     std::set<gd::String> eventsIncludes;
-    gd::Layout &layout = project.GetLayout(i);
+    const gd::Layout &layout = project.GetLayout(i);
     LayoutCodeGenerator layoutCodeGenerator(project);
     gd::String eventsOutput = layoutCodeGenerator.GenerateLayoutCompleteCode(
         layout, eventsIncludes, !exportForPreview);
@@ -666,7 +881,7 @@ bool ExporterHelper::ExportEventsCode(gd::Project &project,
 }
 
 bool ExporterHelper::ExportExternalSourceFiles(
-    gd::Project &project,
+    const gd::Project &project,
     gd::String outputDir,
     std::vector<gd::String> &includesFiles) {
   const auto &allFiles = project.GetAllSourceFiles();
@@ -766,45 +981,6 @@ bool ExporterHelper::ExportIncludesAndLibs(
   return true;
 }
 
-void ExporterHelper::ExportObjectAndBehaviorsIncludes(
-    gd::Project &project, std::vector<gd::String> &includesFiles) {
-  auto addIncludeFiles = [&](const std::vector<gd::String> &newIncludeFiles) {
-    for (const auto &includeFile : newIncludeFiles) {
-      InsertUnique(includesFiles, includeFile);
-    }
-  };
-
-  auto addObjectIncludeFiles = [&](const gd::Object &object) {
-    // Ensure needed files are included for the object type and its behaviors.
-    const gd::ObjectMetadata &metadata =
-        gd::MetadataProvider::GetObjectMetadata(JsPlatform::Get(),
-                                                object.GetType());
-    addIncludeFiles(metadata.includeFiles);
-
-    std::vector<gd::String> behaviors = object.GetAllBehaviorNames();
-    for (std::size_t j = 0; j < behaviors.size(); ++j) {
-      const gd::BehaviorMetadata &metadata =
-          gd::MetadataProvider::GetBehaviorMetadata(
-              JsPlatform::Get(),
-              object.GetBehavior(behaviors[j]).GetTypeName());
-      addIncludeFiles(metadata.includeFiles);
-    }
-  };
-
-  auto addObjectsIncludeFiles =
-      [&](const gd::ObjectsContainer &objectsContainer) {
-        for (std::size_t i = 0; i < objectsContainer.GetObjectsCount(); ++i) {
-          addObjectIncludeFiles(objectsContainer.GetObject(i));
-        }
-      };
-
-  addObjectsIncludeFiles(project);
-  for (std::size_t i = 0; i < project.GetLayoutsCount(); ++i) {
-    gd::Layout &layout = project.GetLayout(i);
-    addObjectsIncludeFiles(layout);
-  }
-}
-
 void ExporterHelper::ExportResources(gd::AbstractFileSystem &fs,
                                      gd::Project &project,
                                      gd::String exportDir) {
@@ -842,5 +1018,82 @@ void ExporterHelper::AddDeprecatedFontFilesToFontResources(
   }
   // end of compatibility code
 }
+
+const std::array<int, 20> IOS_ICONS_SIZES = {
+    180, 60,  120, 76, 152, 40, 80, 57,  114, 72,
+    144, 167, 29,  58, 87,  50, 20, 100, 167, 1024,
+};
+const std::array<int, 6> ANDROID_ICONS_SIZES = {36, 48, 72, 96, 144, 192};
+
+const gd::String ExporterHelper::GenerateWebManifest(
+    const gd::Project &project) {
+  const gd::String &orientation = project.GetOrientation();
+  gd::String icons = "[";
+
+  {
+    std::map<int, gd::String> resourcesForSizes;
+    const auto getFileNameForIcon = [&project](const gd::String &platform,
+                                               const int size) {
+      const gd::String iconName = "icon-" + gd::String::From(size);
+      return project.GetPlatformSpecificAssets().Has(platform, iconName)
+                 ? project.GetResourcesManager()
+                       .GetResource(project.GetPlatformSpecificAssets().Get(
+                           platform, iconName))
+                       .GetFile()
+                 : "";
+    };
+
+    for (const int size : IOS_ICONS_SIZES) {
+      const auto iconFile = getFileNameForIcon("ios", size);
+      if (!iconFile.empty()) resourcesForSizes[size] = iconFile;
+    };
+
+    for (const int size : ANDROID_ICONS_SIZES) {
+      const auto iconFile = getFileNameForIcon("android", size);
+      if (!iconFile.empty()) resourcesForSizes[size] = iconFile;
+    };
+
+    const auto desktopIconFile = getFileNameForIcon("desktop", 512);
+    if (!desktopIconFile.empty()) resourcesForSizes[512] = desktopIconFile;
+
+    for (const auto &sizeAndFile : resourcesForSizes) {
+      icons +=
+          gd::String(R"({
+        "src": "{FILE}",
+        "sizes": "{SIZE}x{SIZE}"
+      },)")
+              .FindAndReplace("{SIZE}", gd::String::From(sizeAndFile.first))
+              .FindAndReplace("{FILE}", sizeAndFile.second);
+    }
+  }
+
+  icons = icons.RightTrim(",") + "]";
+
+  gd::String jsonName =
+      gd::Serializer::ToJSON(gd::SerializerElement(project.GetName()));
+  gd::String jsonPackageName =
+      gd::Serializer::ToJSON(gd::SerializerElement(project.GetPackageName()));
+  gd::String jsonDescription =
+      gd::Serializer::ToJSON(gd::SerializerElement(project.GetDescription()));
+
+  return gd::String(R"webmanifest({
+  "name": {NAME},
+  "short_name": {NAME},
+  "id": {PACKAGE_ID},
+  "description": {DESCRIPTION},
+  "orientation": "{ORIENTATION}",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "black",
+  "categories": ["games", "entertainment"],
+  "icons": {ICONS}
+})webmanifest")
+      .FindAndReplace("{NAME}", jsonName)
+      .FindAndReplace("{PACKAGE_ID}", jsonPackageName)
+      .FindAndReplace("{DESCRIPTION}", jsonDescription)
+      .FindAndReplace("{ORIENTATION}",
+                      orientation == "default" ? "any" : orientation)
+      .FindAndReplace("{ICONS}", icons);
+};
 
 }  // namespace gdjs

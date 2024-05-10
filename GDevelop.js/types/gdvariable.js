@@ -15,6 +15,8 @@ declare class gdVariable {
   getValue(): number;
   setBool(val: boolean): void;
   getBool(): boolean;
+  setFolded(val: boolean): void;
+  isFolded(): boolean;
   getChildrenCount(): number;
   contains(variableToSearch: gdVariable, recursive: boolean): boolean;
   hasChild(str: string): boolean;
@@ -27,8 +29,13 @@ declare class gdVariable {
   pushNew(): gdVariable;
   removeAtIndex(index: number): void;
   getAllChildrenArray(): gdVectorVariable;
+  moveChildInArray(oldIndex: number, newIndex: number): void;
+  insertAtIndex(variable: gdVariable, index: number): boolean;
+  insertChild(name: string, variable: gdVariable): boolean;
   serializeTo(element: gdSerializerElement): void;
   unserializeFrom(element: gdSerializerElement): void;
+  resetPersistentUuid(): gdVariable;
+  clearPersistentUuid(): gdVariable;
   delete(): void;
   ptr: number;
 };

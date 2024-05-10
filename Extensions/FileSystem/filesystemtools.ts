@@ -2,32 +2,20 @@ namespace gdjs {
   const logger = new gdjs.Logger('Filesystem');
   export namespace fileSystem {
     // The Node.js path module, or null if it can't be loaded.
-    export let _path: any = null;
+    const path: typeof import('path') | null =
+      typeof require !== 'undefined' ? require('path') : null;
     // The Node.js fs module, or null if it can't be loaded.
-    export let _fs: any = null;
+    const fs: typeof import('fs') | null =
+      typeof require !== 'undefined' ? require('fs') : null;
+    const asyncFs: typeof import('fs/promises') | null =
+      typeof require !== 'undefined' ? require('fs/promises') : null;
 
-    /** Get the Node.js path module, or null if it can't be loaded */
-    export const _getPath = function () {
-      if (!gdjs.fileSystem._path) {
-        // @ts-ignore
-        gdjs.fileSystem._path =
-          typeof require !== 'undefined' ? require('path') : null;
-      }
-      return gdjs.fileSystem._path;
-    };
-
-    /** Get the Node.js fs module, or null if it can't be loaded */
-    export const _getFs = function () {
-      if (!gdjs.fileSystem._fs) {
-        // @ts-ignore
-        gdjs.fileSystem._fs =
-          typeof require !== 'undefined' ? require('fs') : null;
-      }
-      return gdjs.fileSystem._fs;
-    };
+    if (!fs)
+      logger.warn(
+        'Filesystem is not supported on this platform! Only PC builds support filesystem access.'
+      );
 
     export const getDirectoryName = function (fileOrFolderPath: string) {
-      const path = gdjs.fileSystem._getPath();
       if (!path) {
         return '';
       }
@@ -35,7 +23,6 @@ namespace gdjs {
     };
 
     export const getFileName = function (filePath: string) {
-      const path = gdjs.fileSystem._getPath();
       if (!path) {
         return '';
       }
@@ -43,7 +30,6 @@ namespace gdjs {
     };
 
     export const getExtensionName = function (filePath: string) {
-      const path = gdjs.fileSystem._getPath();
       if (!path) {
         return '';
       }
@@ -52,15 +38,19 @@ namespace gdjs {
 
     /**
      * Get the path to 'Desktop' folder.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to the desktop folder
      */
     export const getDesktopPath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('desktop') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('desktop') || '';
       } else {
         return '';
       }
@@ -68,15 +58,19 @@ namespace gdjs {
 
     /**
      * Get the path to 'Documents' folder.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to the documents folder
      */
     export const getDocumentsPath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('documents') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('documents') || '';
       } else {
         return '';
       }
@@ -84,15 +78,19 @@ namespace gdjs {
 
     /**
      * Get the path to 'Pictures' folder.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to the pictures folder
      */
     export const getPicturesPath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('pictures') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('pictures') || '';
       } else {
         return '';
       }
@@ -100,15 +98,19 @@ namespace gdjs {
 
     /**
      * Get the path to this application 'Executable' file.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to this applications executable file
      */
     export const getExecutablePath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('exe') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('exe') || '';
       } else {
         return '';
       }
@@ -116,14 +118,13 @@ namespace gdjs {
 
     /**
      * Get the path to this application 'Executable' folder.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to this applications executable folder
      */
     export const getExecutableFolderPath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const path = gdjs.fileSystem._getPath();
-      const executablePath = gdjs.fileSystem.getExecutablePath(runtimeScene);
+      const executablePath = getExecutablePath(instanceContainer);
       if (!path) {
         return '';
       }
@@ -132,15 +133,19 @@ namespace gdjs {
 
     /**
      * Get the path to 'UserData' folder.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to userdata folder
      */
     export const getUserdataPath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('userData') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('userData') || '';
       } else {
         return '';
       }
@@ -151,11 +156,15 @@ namespace gdjs {
      * @return The path to user's "home" folder
      */
     export const getUserHomePath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('home') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('home') || '';
       } else {
         return '';
       }
@@ -163,15 +172,19 @@ namespace gdjs {
 
     /**
      * Get the path to 'Temp' folder.
-     * @param runtimeScene The current scene
+     * @param instanceContainer The current container
      * @return The path to temp folder
      */
     export const getTempPath = function (
-      runtimeScene: gdjs.RuntimeScene
+      instanceContainer: gdjs.RuntimeInstanceContainer
     ): string {
-      const electron = runtimeScene.getGame().getRenderer().getElectron();
-      if (electron) {
-        return electron.remote.app.getPath('temp') || '';
+      const remote = instanceContainer
+        .getGame()
+        .getRenderer()
+        .getElectronRemote();
+      const app = remote ? remote.app : null;
+      if (app) {
+        return app.getPath('temp') || '';
       } else {
         return '';
       }
@@ -182,7 +195,6 @@ namespace gdjs {
      * @return The path delimiter
      */
     export const getPathDelimiter = function (): string {
-      const path = gdjs.fileSystem._getPath();
       if (path) {
         return path.sep || '/';
       } else {
@@ -199,11 +211,10 @@ namespace gdjs {
       directory: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
       let result = 'error';
-      if (fileSystem) {
+      if (fs) {
         try {
-          fileSystem.mkdirSync(directory);
+          fs.mkdirSync(directory);
           result = 'ok';
         } catch (err) {
           logger.error(
@@ -214,6 +225,27 @@ namespace gdjs {
       }
       resultVar.setString(result);
     };
+
+    export const makeDirectoryAsync = (
+      directory: string,
+      resultVar: gdjs.Variable
+    ) =>
+      asyncFs
+        ? new gdjs.PromiseTask(
+            asyncFs
+              .mkdir(directory, { recursive: true })
+              .then(() => {
+                resultVar.setString('ok');
+              })
+              .catch((err) => {
+                resultVar.setString('error');
+                logger.error(
+                  "Unable to create directory at: '" + directory + "': ",
+                  err
+                );
+              })
+          )
+        : (resultVar.setString('error'), new gdjs.ResolveTask());
 
     /**
      * Save a string into a file, asynchronously.
@@ -226,9 +258,8 @@ namespace gdjs {
       savePath: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
-      if (fileSystem) {
-        fileSystem.writeFile(savePath, text, 'utf8', (err) => {
+      if (fs) {
+        fs.writeFile(savePath, text, 'utf8', (err) => {
           resultVar.setString('ok');
           if (err) {
             logger.error(
@@ -241,6 +272,28 @@ namespace gdjs {
       }
     };
 
+    export const saveStringToFileAsyncTask = (
+      text: string,
+      savePath: string,
+      resultVar: gdjs.Variable
+    ) =>
+      asyncFs
+        ? new gdjs.PromiseTask(
+            asyncFs
+              .writeFile(savePath, text, { encoding: 'utf8' })
+              .then(() => {
+                resultVar.setString('ok');
+              })
+              .catch((err) => {
+                resultVar.setString('error');
+                logger.error(
+                  "Unable to save the text to path: '" + savePath + "': ",
+                  err
+                );
+              })
+          )
+        : (resultVar.setString('error'), new gdjs.ResolveTask());
+
     /**
      * Save a string into a file.
      * @param text The string to be saved
@@ -252,11 +305,10 @@ namespace gdjs {
       savePath: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
       let result = 'error';
-      if (fileSystem) {
+      if (fs) {
         try {
-          fileSystem.writeFileSync(savePath, text, 'utf8');
+          fs.writeFileSync(savePath, text, 'utf8');
           result = 'ok';
         } catch (err) {
           logger.error(
@@ -279,11 +331,10 @@ namespace gdjs {
       savePath: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
       let result = 'error';
-      if (fileSystem) {
+      if (fs) {
         try {
-          fileSystem.writeFileSync(
+          fs.writeFileSync(
             savePath,
             JSON.stringify(variable.toJSObject()),
             'utf8'
@@ -310,9 +361,8 @@ namespace gdjs {
       savePath: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
-      if (fileSystem) {
-        fileSystem.writeFile(
+      if (fs) {
+        fs.writeFile(
           savePath,
           JSON.stringify(variable.toJSObject()),
           'utf8',
@@ -330,24 +380,51 @@ namespace gdjs {
       }
     };
 
+    export const saveVariableToJSONFileAsyncTask = (
+      variable: gdjs.Variable,
+      savePath: string,
+      resultVar: gdjs.Variable
+    ) =>
+      asyncFs
+        ? new gdjs.PromiseTask(
+            asyncFs
+              .writeFile(savePath, JSON.stringify(variable.toJSObject()), {
+                encoding: 'utf8',
+              })
+              .then(() => {
+                resultVar.setString('ok');
+              })
+              .catch((err) => {
+                resultVar.setString('error');
+                logger.error(
+                  "Unable to save the text to path: '" + savePath + "': ",
+                  err
+                );
+              })
+          )
+        : (resultVar.setString('error'), new gdjs.ResolveTask());
+
     /**
      * Load a string from a file into a scene variable.
      * @param stringVar Variable where to store the content
      * @param loadPath Path to the file
      * @param resultVar The variable where to store the result of the operation
+     * @param removeCRCharacters If true, will remove \r characters usually added by Windows when editing files
      */
     export const loadStringFromFile = function (
       stringVar: gdjs.Variable,
       loadPath: string,
-      resultVar: gdjs.Variable
+      resultVar: gdjs.Variable,
+      removeCRCharacters: boolean
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
       let result = 'error';
-      if (fileSystem) {
+      if (fs) {
         try {
-          const data = fileSystem.readFileSync(loadPath, 'utf8');
+          const data = fs.readFileSync(loadPath, 'utf8');
           if (data) {
-            stringVar.setString(data);
+            stringVar.setString(
+              removeCRCharacters ? data.replace(/\r/g, '') : data
+            );
             result = 'ok';
           }
         } catch (err) {
@@ -365,19 +442,22 @@ namespace gdjs {
      * @param variable Variable to store the variable
      * @param loadPath Path to the file
      * @param resultVar The variable where to store the result of the operation
+     * @param removeCRCharacters If true, will remove \r characters usually added by Windows when editing files
      */
     export const loadVariableFromJSONFile = function (
       variable: gdjs.Variable,
       loadPath: string,
-      resultVar: gdjs.Variable
+      resultVar: gdjs.Variable,
+      removeCRCharacters: boolean
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
       let result = 'error';
-      if (fileSystem) {
+      if (fs) {
         try {
-          const data = fileSystem.readFileSync(loadPath, 'utf8');
+          const data = fs.readFileSync(loadPath, 'utf8');
           if (data) {
-            variable.fromJSON(data);
+            variable.fromJSON(
+              removeCRCharacters ? data.replace(/\r/g, '') : data
+            );
             result = 'ok';
           }
         } catch (err) {
@@ -397,17 +477,20 @@ namespace gdjs {
      * @param variable Variable to store the variable
      * @param loadPath Path to the file
      * @param resultVar The variable where to store the result of the operation
+     * @param removeCRCharacters If true, will remove \r characters usually added by Windows when editing files
      */
     export const loadVariableFromJSONFileAsync = function (
       variable: gdjs.Variable,
       loadPath: string,
-      resultVar: gdjs.Variable
+      resultVar: gdjs.Variable,
+      removeCRCharacters: boolean
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
-      if (fileSystem) {
-        fileSystem.readFile(loadPath, 'utf8', (err, data) => {
+      if (fs) {
+        fs.readFile(loadPath, 'utf8', (err, data) => {
           if (data) {
-            variable.fromJSON(data);
+            variable.fromJSON(
+              removeCRCharacters ? data.replace(/\r/g, '') : data
+            );
             resultVar.setString('ok');
           }
           if (err) {
@@ -423,22 +506,54 @@ namespace gdjs {
       }
     };
 
+    export const loadVariableFromJSONFileAsyncTask = (
+      variable: gdjs.Variable,
+      loadPath: string,
+      resultVar: gdjs.Variable,
+      removeCRCharacters: boolean
+    ) =>
+      asyncFs
+        ? new gdjs.PromiseTask(
+            asyncFs
+              .readFile(loadPath, { encoding: 'utf8' })
+              .then((data) => {
+                if (data)
+                  variable.fromJSON(
+                    removeCRCharacters ? data.replace(/\r/g, '') : data
+                  );
+                resultVar.setString('ok');
+              })
+              .catch((err) => {
+                resultVar.setString('error');
+                logger.error(
+                  "Unable to load the JSON file from path: '" +
+                    loadPath +
+                    "': ",
+                  err
+                );
+              })
+          )
+        : (resultVar.setString('error'), new gdjs.ResolveTask());
+
     /**
      * Load a string from a file into a scene variable, asynchronously.
      * @param stringVar Variable where to store the content
      * @param loadPath Path to the file
      * @param resultVar The variable where to store the result of the operation
+     * @param removeCRCharacters If true, will remove \r characters usually added by Windows when editing files
      */
     export const loadStringFromFileAsync = function (
       stringVar: gdjs.Variable,
       loadPath: string,
-      resultVar: gdjs.Variable
+      resultVar: gdjs.Variable,
+      removeCRCharacters: boolean
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
-      if (fileSystem) {
-        fileSystem.readFile(loadPath, 'utf8', (err, data) => {
+      if (fs) {
+        fs.readFile(loadPath, 'utf8', (err, data) => {
           if (data) {
-            stringVar.setString(data);
+            stringVar.setString(
+              removeCRCharacters ? data.replace(/\r/g, '') : data
+            );
             resultVar.setString('ok');
           }
           if (err) {
@@ -452,6 +567,35 @@ namespace gdjs {
       }
     };
 
+    export const loadStringFromFileAsyncTask = (
+      variable: gdjs.Variable,
+      loadPath: string,
+      resultVar: gdjs.Variable,
+      removeCRCharacters: boolean
+    ) =>
+      asyncFs
+        ? new gdjs.PromiseTask(
+            asyncFs
+              .readFile(loadPath, { encoding: 'utf8' })
+              .then((data) => {
+                if (data)
+                  variable.setString(
+                    removeCRCharacters ? data.replace(/\r/g, '') : data
+                  );
+                resultVar.setString('ok');
+              })
+              .catch((err) => {
+                resultVar.setString('error');
+                logger.error(
+                  "Unable to load the text file from path: '" +
+                    loadPath +
+                    "': ",
+                  err
+                );
+              })
+          )
+        : (resultVar.setString('error'), new gdjs.ResolveTask());
+
     /**
      * Delete a file from the filesystem.
      * @param filePath Path to the file
@@ -461,11 +605,10 @@ namespace gdjs {
       filePath: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
       let result = 'error';
-      if (fileSystem) {
+      if (fs) {
         try {
-          fileSystem.unlinkSync(filePath);
+          fs.unlinkSync(filePath);
           result = 'ok';
         } catch (err) {
           logger.error("Unable to delete the file: '" + filePath + "': ", err);
@@ -484,9 +627,8 @@ namespace gdjs {
       filePath: string,
       resultVar: gdjs.Variable
     ) {
-      const fileSystem = gdjs.fileSystem._getFs();
-      if (fileSystem) {
-        fileSystem.unlink(filePath, (err) => {
+      if (fs) {
+        fs.unlink(filePath, (err) => {
           resultVar.setString('ok');
           if (err) {
             logger.error(
@@ -499,15 +641,35 @@ namespace gdjs {
       }
     };
 
+    export const deleteFileAsyncTask = (
+      filePath: string,
+      resultVar: gdjs.Variable
+    ) =>
+      asyncFs
+        ? new gdjs.PromiseTask(
+            asyncFs
+              .rm(filePath, { recursive: true })
+              .then(() => {
+                resultVar.setString('ok');
+              })
+              .catch((err) => {
+                resultVar.setString('error');
+                logger.error(
+                  "Unable to delete the file: '" + filePath + "': ",
+                  err
+                );
+              })
+          )
+        : (resultVar.setString('error'), new gdjs.ResolveTask());
+
     /**
      * Check if the file or directory exists.
      * @param filePath The path to the file or directory
      * @return true if fhe file or directory exists
      */
     export const pathExists = function (filePath: string): boolean {
-      const fileSystem = gdjs.fileSystem._getFs();
-      if (fileSystem) {
-        return fileSystem.existsSync(filePath);
+      if (fs) {
+        return fs.existsSync(filePath);
       } else {
         return false;
       }

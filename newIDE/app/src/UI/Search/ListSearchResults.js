@@ -8,6 +8,7 @@ import { AutoSizer, Grid } from 'react-virtualized';
 import EmptyMessage from '../EmptyMessage';
 
 type Props<SearchItem> = {|
+  disableAutoTranslate?: boolean,
   searchItems: ?Array<SearchItem>,
   getSearchItemUniqueId: (item: SearchItem) => string,
   renderSearchItem: (
@@ -20,13 +21,16 @@ type Props<SearchItem> = {|
 
 const styles = {
   container: { flex: 1 },
-  grid: { overflowX: 'hidden' },
+  grid: {
+    overflowX: 'hidden',
+  },
 };
 
 const ESTIMATED_ROW_HEIGHT = 90;
 
 /** A virtualized list of search results, caching the searched item heights. */
 export const ListSearchResults = <SearchItem>({
+  disableAutoTranslate,
   searchItems,
   getSearchItemUniqueId,
   renderSearchItem,
@@ -41,10 +45,10 @@ export const ListSearchResults = <SearchItem>({
   const cachedHeights = React.useRef({});
   const onItemHeightComputed = React.useCallback(
     (searchItem, height) => {
-      if (cachedHeights.current[getSearchItemUniqueId(searchItem)] === height)
-        return false;
+      const uniqueId = getSearchItemUniqueId(searchItem);
+      if (cachedHeights.current[uniqueId] === height) return false;
 
-      cachedHeights.current[getSearchItemUniqueId(searchItem)] = height;
+      cachedHeights.current[uniqueId] = height;
       return true;
     },
     [getSearchItemUniqueId]
@@ -100,20 +104,24 @@ export const ListSearchResults = <SearchItem>({
     return (
       <EmptyMessage>
         <Trans>
-          No results returned for your search. Try something else or browse the
-          categories.
+          No results returned for your search. Try something else or typing at
+          least 2 characters.
         </Trans>
       </EmptyMessage>
     );
   }
 
   return (
-    <ErrorBoundary>
-      <div style={styles.container}>
+    <ErrorBoundary
+      componentTitle={<Trans>Search results</Trans>}
+      scope="list-search-result"
+    >
+      <div
+        style={styles.container}
+        className={disableAutoTranslate ? 'notranslate' : ''}
+      >
         <AutoSizer>
           {({ width, height }) => {
-            if (!width || !height) return null;
-
             // Reset the cached heights in case the width changed.
             if (cachedHeightsForWidth.current !== width) {
               cachedHeights.current = {};

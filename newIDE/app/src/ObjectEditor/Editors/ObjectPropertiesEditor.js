@@ -7,7 +7,7 @@ import PropertiesEditor from '../../PropertiesEditor';
 import propertiesMapToSchema from '../../PropertiesEditor/PropertiesMapToSchema';
 import EmptyMessage from '../../UI/EmptyMessage';
 import { type EditorProps } from './EditorProps.flow';
-import { Column, Line } from '../../UI/Grid';
+import { Line } from '../../UI/Grid';
 import { getExtraObjectsInformation } from '../../Hints';
 import { getObjectTutorialIds } from '../../Utils/GDevelopServices/Tutorial';
 import AlertMessage from '../../UI/AlertMessage';
@@ -20,21 +20,23 @@ type Props = EditorProps;
 
 const ObjectPropertiesEditor = (props: Props) => {
   const {
-    object,
+    objectConfiguration,
     project,
-    resourceSources,
-    onChooseResource,
-    resourceExternalEditors,
+    resourceManagementProps,
     unsavedChanges,
+    renderObjectNameField,
   } = props;
 
   // TODO: Workaround a bad design of ObjectJsImplementation. When getProperties
   // and associated methods are redefined in JS, they have different arguments (
   // see ObjectJsImplementation C++ implementation). If called directly here from JS,
-  // the arguments will be mismatched. To workaround this, always case the object to
+  // the arguments will be mismatched. To workaround this, always cast the object to
   // a base gdObject to ensure C++ methods are called.
-  const objectAsGdObject = gd.castObject(object, gd.gdObject);
-  const properties = objectAsGdObject.getProperties();
+  const objectConfigurationAsGd = gd.castObject(
+    objectConfiguration,
+    gd.ObjectConfiguration
+  );
+  const properties = objectConfigurationAsGd.getProperties();
 
   const propertiesSchema = propertiesMapToSchema(
     properties,
@@ -43,15 +45,16 @@ const ObjectPropertiesEditor = (props: Props) => {
   );
 
   const extraInformation = getExtraObjectsInformation()[
-    objectAsGdObject.getType()
+    objectConfigurationAsGd.getType()
   ];
 
-  const tutorialIds = getObjectTutorialIds(objectAsGdObject.getType());
+  const tutorialIds = getObjectTutorialIds(objectConfigurationAsGd.getType());
 
   return (
     <I18n>
       {({ i18n }) => (
-        <ColumnStackLayout>
+        <ColumnStackLayout noMargin>
+          {renderObjectNameField && renderObjectNameField()}
           {tutorialIds.map(tutorialId => (
             <DismissableTutorialMessage
               key={tutorialId}
@@ -62,23 +65,21 @@ const ObjectPropertiesEditor = (props: Props) => {
             <React.Fragment>
               {extraInformation ? (
                 <Line>
-                  <Column noMargin>
+                  <ColumnStackLayout noMargin>
                     {extraInformation.map(({ kind, message }, index) => (
                       <AlertMessage kind={kind} key={index}>
                         {i18n._(message)}
                       </AlertMessage>
                     ))}
-                  </Column>
+                  </ColumnStackLayout>
                 </Line>
               ) : null}
               <PropertiesEditor
                 unsavedChanges={unsavedChanges}
                 schema={propertiesSchema}
-                instances={[objectAsGdObject]}
+                instances={[objectConfigurationAsGd]}
                 project={project}
-                resourceSources={resourceSources}
-                onChooseResource={onChooseResource}
-                resourceExternalEditors={resourceExternalEditors}
+                resourceManagementProps={resourceManagementProps}
               />
             </React.Fragment>
           ) : (

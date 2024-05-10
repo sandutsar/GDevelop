@@ -20,13 +20,15 @@ void DeclareDestroyOutsideBehaviorExtension(gd::PlatformExtension& extension) {
                                  "or other short-lived objects."),
                                "Florian Rival",
                                "Open source (MIT License)")
+      .SetCategory("Game mechanic")
+      .SetTags("screen")
       .SetExtensionHelpPath("/behaviors/destroyoutside");
 
   gd::BehaviorMetadata& aut =
       extension.AddBehavior("DestroyOutside",
                             _("Destroy when outside of the screen"),
                             _("DestroyOutside"),
-                            _("Automatically destroy the object when it goes "
+                            _("Destroy objects automatically when they go "
                               "outside of the screen's borders."),
                             "",
                             "CppPlatform/Extensions/destroyoutsideicon.png",
@@ -34,36 +36,34 @@ void DeclareDestroyOutsideBehaviorExtension(gd::PlatformExtension& extension) {
                             std::make_shared<DestroyOutsideBehavior>(),
                             std::shared_ptr<gd::BehaviorsSharedData>());
 
-#if defined(GD_IDE_ONLY)
   aut.AddCondition("ExtraBorder",
                    _("Additional border"),
                    _("Compare the additional border that the object must cross "
                      "before being deleted."),
                    _("the additional border"),
-                   "",
+                   _("Destroy outside configuration"),
                    "CppPlatform/Extensions/destroyoutsideicon24.png",
                    "CppPlatform/Extensions/destroyoutsideicon16.png")
       .AddParameter("object", _("Object"))
       .AddParameter("behavior", _("Behavior"), "DestroyOutside")
-      .UseStandardRelationalOperatorParameters("number")
+      .UseStandardRelationalOperatorParameters(
+          "number", gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
-      .SetFunctionName("GetExtraBorder")
-      .SetIncludeFile("DestroyOutsideBehavior/DestroyOutsideRuntimeBehavior.h");
+      .SetFunctionName("GetExtraBorder");
 
   aut.AddAction("ExtraBorder",
                 _("Additional border"),
                 _("Change the additional border that the object must cross "
                   "before being deleted."),
                 _("the additional border"),
-                "",
+                _("Destroy outside configuration"),
                 "CppPlatform/Extensions/destroyoutsideicon24.png",
                 "CppPlatform/Extensions/destroyoutsideicon16.png")
       .AddParameter("object", _("Object"))
       .AddParameter("behavior", _("Behavior"), "DestroyOutside")
-      .UseStandardOperatorParameters("number")
+      .UseStandardOperatorParameters("number",
+                                     gd::ParameterOptions::MakeNewOptions())
       .MarkAsAdvanced()
       .SetFunctionName("SetExtraBorder")
-      .SetGetter("GetExtraBorder")
-      .SetIncludeFile("DestroyOutsideBehavior/DestroyOutsideRuntimeBehavior.h");
-#endif
+      .SetGetter("GetExtraBorder");
 }

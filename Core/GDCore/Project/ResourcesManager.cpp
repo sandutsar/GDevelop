@@ -18,6 +18,16 @@
 #include "GDCore/Tools/Localization.h"
 #include "GDCore/Tools/Log.h"
 
+namespace {
+gd::String NormalizePathSeparator(const gd::String& path) {
+  gd::String normalizedPath = path;
+  while (normalizedPath.find('\\') != gd::String::npos)
+    normalizedPath.replace(normalizedPath.find('\\'), 1, "/");
+
+  return normalizedPath;
+}
+}  // namespace
+
 namespace gd {
 
 gd::String Resource::badStr;
@@ -75,8 +85,18 @@ std::shared_ptr<Resource> ResourcesManager::CreateResource(
     return std::make_shared<VideoResource>();
   else if (kind == "json")
     return std::make_shared<JsonResource>();
+  else if (kind == "tilemap")
+    return std::make_shared<TilemapResource>();
+  else if (kind == "tileset")
+    return std::make_shared<TilesetResource>();
   else if (kind == "bitmapFont")
     return std::make_shared<BitmapFontResource>();
+  else if (kind == "model3D")
+    return std::make_shared<Model3DResource>();
+  else if (kind == "atlas")
+    return std::make_shared<AtlasResource>();
+  else if (kind == "spine")
+    return std::make_shared<SpineResource>();
 
   std::cout << "Bad resource created (type: " << kind << ")" << std::endl;
   return std::make_shared<Resource>();
@@ -126,19 +146,20 @@ std::vector<gd::String> ResourcesManager::GetAllResourceNames() const {
 }
 
 std::vector<gd::String> ResourcesManager::FindFilesNotInResources(
-    const std::vector<gd::String>& filesToCheck) const {
-  std::unordered_set<gd::String> resourceFiles;
-  for (const auto& resource: resources) {
-    resourceFiles.insert(resource->GetFile());
+    const std::vector<gd::String>& filePathsToCheck) const {
+  std::unordered_set<gd::String> resourceFilePaths;
+  for (const auto& resource : resources) {
+    resourceFilePaths.insert(NormalizePathSeparator(resource->GetFile()));
   }
 
-  std::vector<gd::String> filesNotInResources;
-  for(const gd::String& file: filesToCheck) {
-    if (resourceFiles.find(file) == resourceFiles.end())
-      filesNotInResources.push_back(file);
+  std::vector<gd::String> filePathsNotInResources;
+  for (const gd::String& file : filePathsToCheck) {
+    gd::String normalizedPath = NormalizePathSeparator(file);
+    if (resourceFilePaths.find(normalizedPath) == resourceFilePaths.end())
+      filePathsNotInResources.push_back(file);
   }
 
-  return filesNotInResources;
+  return filePathsNotInResources;
 }
 
 std::map<gd::String, gd::PropertyDescriptor> Resource::GetProperties() const {
@@ -173,10 +194,16 @@ std::map<gd::String, gd::PropertyDescriptor> AudioResource::GetProperties()
     const {
   std::map<gd::String, gd::PropertyDescriptor> properties;
   properties[_("Preload as sound")]
+      .SetDescription(_("Loads the fully decoded file into cache, so it can be played right away as Sound with no further delays."))
       .SetValue(preloadAsSound ? "true" : "false")
       .SetType("Boolean");
   properties[_("Preload as music")]
+      .SetDescription(_("Prepares the file for immediate streaming as Music (does not wait for complete download)."))
       .SetValue(preloadAsMusic ? "true" : "false")
+      .SetType("Boolean");
+  properties[_("Preload in cache")]
+      .SetDescription(_("Loads the complete file into cache, but does not decode it into memory until requested."))
+      .SetValue(preloadInCache ? "true" : "false")
       .SetType("Boolean");
 
   return properties;
@@ -188,6 +215,8 @@ bool AudioResource::UpdateProperty(const gd::String& name,
     preloadAsSound = value == "1";
   else if (name == _("Preload as music"))
     preloadAsMusic = value == "1";
+  else if (name == _("Preload in cache"))
+    preloadInCache = value == "1";
 
   return true;
 }
@@ -509,19 +538,7 @@ void ResourcesManager::SerializeTo(SerializerElement& element) const {
     if (resources[i] == std::shared_ptr<Resource>()) break;
 
     SerializerElement& resourceElement = resourcesElement.AddChild("resource");
-    resourceElement.SetAttribute("kind", resources[i]->GetKind());
-    resourceElement.SetAttribute("name", resources[i]->GetName());
-    resourceElement.SetAttribute("metadata", resources[i]->GetMetadata());
-
-    const gd::String& originName = resources[i]->GetOriginName();
-    const gd::String& originIdentifier = resources[i]->GetOriginIdentifier();
-    if (!originName.empty() || !originIdentifier.empty()) {
-      resourceElement.AddChild("origin")
-          .SetAttribute("name", originName)
-          .SetAttribute("identifier", originIdentifier);
-    }
-
-    resources[i]->SerializeTo(resourceElement);
+    gd::ResourcesManager::SerializeResourceTo(*resources[i], resourceElement);
   }
 
   SerializerElement& resourcesFoldersElement =
@@ -531,12 +548,24 @@ void ResourcesManager::SerializeTo(SerializerElement& element) const {
     folders[i].SerializeTo(resourcesFoldersElement.AddChild("folder"));
 }
 
-void ImageResource::SetFile(const gd::String& newFile) {
-  file = newFile;
+void ResourcesManager::SerializeResourceTo(gd::Resource &resource,
+                                           SerializerElement &resourceElement) {
+  resourceElement.SetAttribute("kind", resource.GetKind());
+  resourceElement.SetAttribute("name", resource.GetName());
+  resourceElement.SetAttribute("metadata", resource.GetMetadata());
 
-  // Convert all backslash to slashs.
-  while (file.find('\\') != gd::String::npos)
-    file.replace(file.find('\\'), 1, "/");
+  const gd::String &originName = resource.GetOriginName();
+  const gd::String &originIdentifier = resource.GetOriginIdentifier();
+  if (!originName.empty() || !originIdentifier.empty()) {
+    resourceElement.AddChild("origin")
+        .SetAttribute("name", originName)
+        .SetAttribute("identifier", originIdentifier);
+  }
+  resource.SerializeTo(resourceElement);
+}
+
+void ImageResource::SetFile(const gd::String& newFile) {
+  file = NormalizePathSeparator(newFile);
 }
 
 void ImageResource::UnserializeFrom(const SerializerElement& element) {
@@ -554,11 +583,7 @@ void ImageResource::SerializeTo(SerializerElement& element) const {
 }
 
 void AudioResource::SetFile(const gd::String& newFile) {
-  file = newFile;
-
-  // Convert all backslash to slashs.
-  while (file.find('\\') != gd::String::npos)
-    file.replace(file.find('\\'), 1, "/");
+  file = NormalizePathSeparator(newFile);
 }
 
 void AudioResource::UnserializeFrom(const SerializerElement& element) {
@@ -566,6 +591,7 @@ void AudioResource::UnserializeFrom(const SerializerElement& element) {
   SetFile(element.GetStringAttribute("file"));
   SetPreloadAsMusic(element.GetBoolAttribute("preloadAsMusic"));
   SetPreloadAsSound(element.GetBoolAttribute("preloadAsSound"));
+  SetPreloadInCache(element.GetBoolAttribute("preloadInCache"));
 }
 
 void AudioResource::SerializeTo(SerializerElement& element) const {
@@ -573,14 +599,11 @@ void AudioResource::SerializeTo(SerializerElement& element) const {
   element.SetAttribute("file", GetFile());
   element.SetAttribute("preloadAsMusic", PreloadAsMusic());
   element.SetAttribute("preloadAsSound", PreloadAsSound());
+  element.SetAttribute("preloadInCache", PreloadInCache());
 }
 
 void FontResource::SetFile(const gd::String& newFile) {
-  file = newFile;
-
-  // Convert all backslash to slashs.
-  while (file.find('\\') != gd::String::npos)
-    file.replace(file.find('\\'), 1, "/");
+  file = NormalizePathSeparator(newFile);
 }
 
 void FontResource::UnserializeFrom(const SerializerElement& element) {
@@ -594,11 +617,7 @@ void FontResource::SerializeTo(SerializerElement& element) const {
 }
 
 void VideoResource::SetFile(const gd::String& newFile) {
-  file = newFile;
-
-  // Convert all backslash to slashs.
-  while (file.find('\\') != gd::String::npos)
-    file.replace(file.find('\\'), 1, "/");
+  file = NormalizePathSeparator(newFile);
 }
 
 void VideoResource::UnserializeFrom(const SerializerElement& element) {
@@ -612,11 +631,7 @@ void VideoResource::SerializeTo(SerializerElement& element) const {
 }
 
 void JsonResource::SetFile(const gd::String& newFile) {
-  file = newFile;
-
-  // Convert all backslash to slashs.
-  while (file.find('\\') != gd::String::npos)
-    file.replace(file.find('\\'), 1, "/");
+  file = NormalizePathSeparator(newFile);
 }
 
 void JsonResource::UnserializeFrom(const SerializerElement& element) {
@@ -649,13 +664,76 @@ bool JsonResource::UpdateProperty(const gd::String& name,
   return true;
 }
 
+void TilemapResource::SetFile(const gd::String& newFile) {
+  file = NormalizePathSeparator(newFile);
+}
+
+void TilemapResource::UnserializeFrom(const SerializerElement& element) {
+  SetUserAdded(element.GetBoolAttribute("userAdded"));
+  SetFile(element.GetStringAttribute("file"));
+  DisablePreload(element.GetBoolAttribute("disablePreload", false));
+}
+
+void TilemapResource::SerializeTo(SerializerElement& element) const {
+  element.SetAttribute("userAdded", IsUserAdded());
+  element.SetAttribute("file", GetFile());
+  element.SetAttribute("disablePreload", IsPreloadDisabled());
+}
+
+std::map<gd::String, gd::PropertyDescriptor> TilemapResource::GetProperties()
+    const {
+  std::map<gd::String, gd::PropertyDescriptor> properties;
+  properties["disablePreload"]
+      .SetValue(disablePreload ? "true" : "false")
+      .SetType("Boolean")
+      .SetLabel(_("Disable preloading at game startup"));
+
+  return properties;
+}
+
+bool TilemapResource::UpdateProperty(const gd::String& name,
+                                  const gd::String& value) {
+  if (name == "disablePreload") disablePreload = value == "1";
+
+  return true;
+}
+
+void TilesetResource::SetFile(const gd::String& newFile) {
+  file = NormalizePathSeparator(newFile);
+}
+
+void TilesetResource::UnserializeFrom(const SerializerElement& element) {
+  SetUserAdded(element.GetBoolAttribute("userAdded"));
+  SetFile(element.GetStringAttribute("file"));
+  DisablePreload(element.GetBoolAttribute("disablePreload", false));
+}
+
+void TilesetResource::SerializeTo(SerializerElement& element) const {
+  element.SetAttribute("userAdded", IsUserAdded());
+  element.SetAttribute("file", GetFile());
+  element.SetAttribute("disablePreload", IsPreloadDisabled());
+}
+
+std::map<gd::String, gd::PropertyDescriptor> TilesetResource::GetProperties()
+    const {
+  std::map<gd::String, gd::PropertyDescriptor> properties;
+  properties["disablePreload"]
+      .SetValue(disablePreload ? "true" : "false")
+      .SetType("Boolean")
+      .SetLabel(_("Disable preloading at game startup"));
+
+  return properties;
+}
+
+bool TilesetResource::UpdateProperty(const gd::String& name,
+                                  const gd::String& value) {
+  if (name == "disablePreload") disablePreload = value == "1";
+
+  return true;
+}
 
 void BitmapFontResource::SetFile(const gd::String& newFile) {
-  file = newFile;
-
-  // Convert all backslash to slashs.
-  while (file.find('\\') != gd::String::npos)
-    file.replace(file.find('\\'), 1, "/");
+  file = NormalizePathSeparator(newFile);
 }
 
 void BitmapFontResource::UnserializeFrom(const SerializerElement& element) {
@@ -664,6 +742,34 @@ void BitmapFontResource::UnserializeFrom(const SerializerElement& element) {
 }
 
 void BitmapFontResource::SerializeTo(SerializerElement& element) const {
+  element.SetAttribute("userAdded", IsUserAdded());
+  element.SetAttribute("file", GetFile());
+}
+
+void Model3DResource::SetFile(const gd::String& newFile) {
+  file = NormalizePathSeparator(newFile);
+}
+
+void Model3DResource::UnserializeFrom(const SerializerElement& element) {
+  SetUserAdded(element.GetBoolAttribute("userAdded"));
+  SetFile(element.GetStringAttribute("file"));
+}
+
+void Model3DResource::SerializeTo(SerializerElement& element) const {
+  element.SetAttribute("userAdded", IsUserAdded());
+  element.SetAttribute("file", GetFile());
+}
+
+void AtlasResource::SetFile(const gd::String& newFile) {
+  file = NormalizePathSeparator(newFile);
+}
+
+void AtlasResource::UnserializeFrom(const SerializerElement& element) {
+  SetUserAdded(element.GetBoolAttribute("userAdded"));
+  SetFile(element.GetStringAttribute("file"));
+}
+
+void AtlasResource::SerializeTo(SerializerElement& element) const {
   element.SetAttribute("userAdded", IsUserAdded());
   element.SetAttribute("file", GetFile());
 }

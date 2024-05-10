@@ -1,11 +1,11 @@
 // @flow
-import optionalRequire from '../../Utils/OptionalRequire.js';
+import optionalRequire from '../../Utils/OptionalRequire';
 import { type FileMetadata } from '../index';
-import { unsplit } from '../../Utils/ObjectSplitter.js';
+import { unsplit } from '../../Utils/ObjectSplitter';
 const fs = optionalRequire('fs');
 const path = optionalRequire('path');
-const electron = optionalRequire('electron');
-const dialog = electron ? electron.remote.dialog : null;
+const remote = optionalRequire('@electron/remote');
+const dialog = remote ? remote.dialog : null;
 
 const readJSONFile = (filepath: string): Promise<Object> => {
   if (!fs) return Promise.reject('Filesystem is not supported.');
@@ -26,7 +26,7 @@ const readJSONFile = (filepath: string): Promise<Object> => {
 
 export const onOpenWithPicker = (): Promise<?FileMetadata> => {
   if (!dialog) return Promise.reject('Not supported');
-  const browserWindow = electron.remote.getCurrentWindow();
+  const browserWindow = remote.getCurrentWindow();
 
   return dialog
     .showOpenDialog(browserWindow, {
@@ -65,29 +65,30 @@ export const onOpen = (
   });
 };
 
-export const hasAutoSave = (
+export const getAutoSaveCreationDate = async (
   fileMetadata: FileMetadata,
   compareLastModified: boolean
-): Promise<boolean> => {
+): Promise<?number> => {
   const filePath = fileMetadata.fileIdentifier;
   const autoSavePath = filePath + '.autosave';
   if (fs.existsSync(autoSavePath)) {
+    const autoSavedTime = fs.statSync(autoSavePath).mtime.getTime();
     if (!compareLastModified) {
-      return Promise.resolve(true);
+      return autoSavedTime;
     }
     try {
-      const autoSavedTime = fs.statSync(autoSavePath).mtime.getTime();
       const saveTime = fs.statSync(filePath).mtime.getTime();
-      if (autoSavedTime > saveTime) {
-        return Promise.resolve(true);
-      }
+      // When comparing the last modified time, add a 5 seconds margin to avoid
+      // showing the warning if the user has just saved the project, or if the
+      // project has been decompressed from a zip file, causing the last modified
+      // time to be the time of decompression.
+      return autoSavedTime > saveTime + 5000 ? autoSavedTime : null;
     } catch (err) {
       console.error('Unable to compare *.autosave to project', err);
-      return Promise.resolve(false);
+      return null;
     }
-    return Promise.resolve(false);
   }
-  return Promise.resolve(false);
+  return null;
 };
 
 export const onGetAutoSave = (fileMetadata: FileMetadata) => {

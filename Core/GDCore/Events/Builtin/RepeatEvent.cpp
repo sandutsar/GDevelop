@@ -35,7 +35,7 @@ vector<pair<gd::Expression*, gd::ParameterMetadata> >
     RepeatEvent::GetAllExpressionsWithMetadata() {
   vector<pair<gd::Expression*, gd::ParameterMetadata> >
       allExpressionsWithMetadata;
-  auto metadata = gd::ParameterMetadata().SetType("expression");
+  auto metadata = gd::ParameterMetadata().SetType("number");
   allExpressionsWithMetadata.push_back(
       std::make_pair(&repeatNumberExpression, metadata));
 
@@ -61,7 +61,7 @@ vector<pair<const gd::Expression*, const gd::ParameterMetadata> >
     RepeatEvent::GetAllExpressionsWithMetadata() const {
   vector<pair<const gd::Expression*, const gd::ParameterMetadata> >
       allExpressionsWithMetadata;
-  auto metadata = gd::ParameterMetadata().SetType("expression");
+  auto metadata = gd::ParameterMetadata().SetType("number");
   allExpressionsWithMetadata.push_back(
       std::make_pair(&repeatNumberExpression, metadata));
 
@@ -75,8 +75,10 @@ void RepeatEvent::SerializeTo(SerializerElement& element) const {
       conditions, element.AddChild("conditions"));
   gd::EventsListSerialization::SerializeInstructionsTo(
       actions, element.AddChild("actions"));
-  gd::EventsListSerialization::SerializeEventsTo(events,
-                                                 element.AddChild("events"));
+
+  if (!events.IsEmpty())
+    gd::EventsListSerialization::SerializeEventsTo(events,
+                                                  element.AddChild("events"));
 }
 
 void RepeatEvent::UnserializeFrom(gd::Project& project,
@@ -89,8 +91,12 @@ void RepeatEvent::UnserializeFrom(gd::Project& project,
       project, conditions, element.GetChild("conditions", 0, "Conditions"));
   gd::EventsListSerialization::UnserializeInstructionsFrom(
       project, actions, element.GetChild("actions", 0, "Actions"));
-  gd::EventsListSerialization::UnserializeEventsFrom(
-      project, events, element.GetChild("events", 0, "Events"));
+
+  events.Clear();
+  if (element.HasChild("events", "Events")) {
+    gd::EventsListSerialization::UnserializeEventsFrom(
+        project, events, element.GetChild("events", 0, "Events"));
+  }
 }
 
 }  // namespace gd

@@ -1,4 +1,5 @@
-// @flow
+//@ts-check
+/// <reference path="../JsExtensionTypes.d.ts" />
 /**
  * This is a declaration of an extension for GDevelop 5.
  *
@@ -12,18 +13,9 @@
  * More information on https://github.com/4ian/GDevelop/blob/master/newIDE/README-extensions.md
  */
 
-/*::
-// Import types to allow Flow to do static type checking on this file.
-// Extensions declaration are typed using Flow (like the editor), but the files
-// for the game engine are checked with TypeScript annotations.
-import { type ObjectsRenderingService, type ObjectsEditorService } from '../JsExtensionTypes.flow.js'
-*/
-
+/** @type {ExtensionModule} */
 module.exports = {
-  createExtension: function (
-    _ /*: (string) => string */,
-    gd /*: libGDevelop */
-  ) {
+  createExtension: function (_, gd) {
     const extension = new gd.PlatformExtension();
     extension
       .setExtensionInformation(
@@ -34,7 +26,11 @@ module.exports = {
         'Matthias Meike',
         'Open source (MIT License)'
       )
-      .setExtensionHelpPath('/all-features/device-vibration');
+      .setExtensionHelpPath('/all-features/device-vibration')
+      .setCategory('User interface');
+    extension
+      .addInstructionOrExpressionGroupMetadata(_('Device vibration'))
+      .setIcon('JsPlatform/Extensions/vibration_start32.png');
 
     extension
       .addDependency()
@@ -49,8 +45,8 @@ module.exports = {
         _('Vibrate'),
         _('Vibrate (Duration in ms).'),
         _('Start vibration for _PARAM0_ ms'),
-        _('Vibration'),
-        'JsPlatform/Extensions/vibration_start24.png',
+        '',
+        'JsPlatform/Extensions/vibration_start32.png',
         'JsPlatform/Extensions/vibration_start32.png'
       )
       .addParameter('expression', _('Duration'), '', false)
@@ -66,8 +62,8 @@ module.exports = {
           'Vibrate (Duration in ms). You can add multiple comma-separated values where every second value determines the period of silence between two vibrations. This is a string value so use quotes.'
         ),
         _('Start vibration for _PARAM0_ ms'),
-        _('Vibration'),
-        'JsPlatform/Extensions/vibration_pattern_start24.png',
+        '',
+        'JsPlatform/Extensions/vibration_pattern_start32.png',
         'JsPlatform/Extensions/vibration_pattern_start32.png'
       )
       .addParameter(
@@ -86,8 +82,8 @@ module.exports = {
         _('Stop vibration'),
         _('Stop the vibration'),
         _('Stop vibration'),
-        _('Vibration'),
-        'JsPlatform/Extensions/vibration_stop24.png',
+        '',
+        'JsPlatform/Extensions/vibration_stop32.png',
         'JsPlatform/Extensions/vibration_stop32.png'
       )
       .getCodeExtraInformation()
@@ -96,10 +92,7 @@ module.exports = {
 
     return extension;
   },
-  runExtensionSanityTests: function (
-    gd /*: libGDevelop */,
-    extension /*: gdPlatformExtension*/
-  ) {
+  runExtensionSanityTests: function (gd, extension) {
     return [];
   },
 };

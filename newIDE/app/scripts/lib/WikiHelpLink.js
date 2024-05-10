@@ -1,6 +1,6 @@
 // @ts-check
 
-const gdevelopWikiUrlRoot = 'http://wiki.compilgames.net/doku.php/gdevelop5';
+const gdevelopWikiUrlRoot = '/gdevelop5';
 const improperlyFormattedHelpPaths = new Set();
 
 /** @param {string} str */
@@ -45,7 +45,7 @@ const generateReadMoreLink = helpPagePath => {
   const url = getHelpLink(helpPagePath);
   if (!url) return '';
 
-  return `[[${url}|Read more explanations about it.]]`;
+  return `[Read more explanations about it.](${url})`;
 };
 
 const renamedExtensionNames = {

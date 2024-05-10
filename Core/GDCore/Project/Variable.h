@@ -6,10 +6,10 @@
 
 #ifndef GDCORE_VARIABLE_H
 #define GDCORE_VARIABLE_H
+#include <cmath>
 #include <map>
 #include <memory>
 #include <vector>
-#include <cmath>
 
 #include "GDCore/String.h"
 namespace gd {
@@ -98,7 +98,7 @@ class GD_CORE_API Variable {
   void SetValue(double val) {
     value = val;
     // NaN values are not supported by GDevelop nor the serializer.
-    if(std::isnan(value)) value = 0.0;
+    if (std::isnan(value)) value = 0.0;
     type = Type::Number;
   }
 
@@ -185,9 +185,9 @@ class GD_CORE_API Variable {
    * \brief Get the count of children that the variable has.
    */
   size_t GetChildrenCount() const {
-    return type == Type::Structure
-               ? children.size()
-               : type == Type::Array ? childrenArray.size() : 0;
+    return type == Type::Structure ? children.size()
+           : type == Type::Array   ? childrenArray.size()
+                                   : 0;
   };
 
   /** \name Structure
@@ -291,11 +291,37 @@ class GD_CORE_API Variable {
   void RemoveAtIndex(const size_t index);
 
   /**
+   * \brief Move child in array.
+   */
+  void MoveChildInArray(const size_t oldIndex, const size_t newIndex);
+
+  /**
+   * \brief Insert child in array.
+   */
+  bool InsertAtIndex(const gd::Variable& variable, const size_t index);
+
+  /**
+   * \brief Insert a child in a structure.
+   */
+  bool InsertChild(const gd::String& name, const gd::Variable& variable);
+
+  /**
    * \brief Get the vector containing all the children.
    */
   const std::vector<std::shared_ptr<Variable>>& GetAllChildrenArray() const {
     return childrenArray;
   }
+
+  /**
+   * \brief Set if the children must be folded.
+   */
+  void SetFolded(bool fold = true) { folded = fold; }
+
+  /**
+   * \brief True if the children should be folded in the variables editor.
+   */
+  bool IsFolded() const { return folded; }
+
   ///@}
   ///@}
 
@@ -312,6 +338,24 @@ class GD_CORE_API Variable {
    * \brief Unserialize the variable.
    */
   void UnserializeFrom(const SerializerElement& element);
+
+  /**
+   * \brief Reset the persistent UUID used to recognize
+   * the same variable between serialization.
+   */
+  Variable& ResetPersistentUuid();
+
+  /**
+   * \brief Remove the persistent UUID - when the variable no
+   * longer needs to be recognized between serializations.
+   */
+  Variable& ClearPersistentUuid() { persistentUuid = ""; return *this; };
+
+  /**
+   * \brief Get the persistent UUID used to recognize
+   * the same variable between serialization.
+   */
+  const gd::String& GetPersistentUuid() const { return persistentUuid; };
   ///@}
 
  private:
@@ -325,6 +369,7 @@ class GD_CORE_API Variable {
    */
   static Type StringAsType(const gd::String& str);
 
+  bool folded;
   mutable Type type;
   mutable gd::String str;
   mutable double value;
@@ -334,6 +379,8 @@ class GD_CORE_API Variable {
   mutable std::vector<std::shared_ptr<Variable>>
       childrenArray;  ///< Children, when the variable is considered as an
                       ///< array.
+  mutable gd::String persistentUuid;  ///< A persistent random version 4 UUID,
+                                      ///< useful for computing changesets.
 
   /**
    * Initialize children by copying them from another variable.  Used by

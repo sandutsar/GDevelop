@@ -70,8 +70,8 @@ export default class EventsContextAnalyzerDialog extends React.Component<
 
     return (
       <Dialog
+        title={<Trans>Events analysis</Trans>}
         actions={actions}
-        cannotBeDismissed={false}
         open
         onRequestClose={onClose}
       >

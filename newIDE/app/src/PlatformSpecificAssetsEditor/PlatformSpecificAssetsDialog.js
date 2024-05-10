@@ -1,24 +1,22 @@
 // @flow
 import { Trans } from '@lingui/macro';
+import { t } from '@lingui/macro';
+import { I18n } from '@lingui/react';
 
 import * as React from 'react';
 import FlatButton from '../UI/FlatButton';
-import RaisedButton from '../UI/RaisedButton';
-import Dialog from '../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import { Line } from '../UI/Grid';
 import ResourcesLoader from '../ResourcesLoader';
 import ResourceSelectorWithThumbnail from '../ResourcesList/ResourceSelectorWithThumbnail';
-import {
-  type ResourceSource,
-  type ChooseResourceFunction,
-} from '../ResourcesList/ResourceSource';
-import { type ResourceExternalEditor } from '../ResourcesList/ResourceExternalEditor.flow';
-import { resizeImage, isResizeSupported } from './ImageResizer';
+import { type ResourceManagementProps } from '../ResourcesList/ResourceSource';
+import { resizeImage } from './ImageResizer';
 import { showErrorBox } from '../UI/Messages/MessageBox';
-import optionalRequire from '../Utils/OptionalRequire';
 import Text from '../UI/Text';
-import { ColumnStackLayout } from '../UI/Layout';
-const path = optionalRequire('path');
+import { ColumnStackLayout, ResponsiveLineStackLayout } from '../UI/Layout';
+import AlertMessage from '../UI/AlertMessage';
+import ErrorBoundary from '../UI/ErrorBoundary';
+
 const gd: libGDevelop = global.gd;
 
 type Props = {|
@@ -26,19 +24,26 @@ type Props = {|
   open: boolean,
   onClose: Function,
   onApply: Function,
-  resourceSources: Array<ResourceSource>,
-  onChooseResource: ChooseResourceFunction,
-  resourceExternalEditors: Array<ResourceExternalEditor>,
+  resourceManagementProps: ResourceManagementProps,
 |};
 
 type State = {|
+  thumbnailResourceName: string,
   desktopIconResourceNames: Array<string>,
   androidIconResourceNames: Array<string>,
+  androidWindowSplashScreenAnimatedIconResourceName: string,
   iosIconResourceNames: Array<string>,
+  displayGamesPlatformThumbnailWarning: boolean,
 |};
 
 const desktopSizes = [512];
 const androidSizes = [192, 144, 96, 72, 48, 36];
+/**
+ * The recommended size for the image containing the Android SplashScreen icon.
+ * It's based on the recommended 288dp for a xxdpi (=480 dpi) screen, which results in
+ * 288 * 480 / 160 = "288 @ 3x" = 864px.
+ */
+const androidWindowSplashScreenAnimatedIconRecommendedSize = 864;
 const iosSizes = [
   1024,
   180,
@@ -61,30 +66,36 @@ const iosSizes = [
   20,
 ];
 
-export default class PlatformSpecificAssetsDialog extends React.Component<
-  Props,
-  State
-> {
+class PlatformSpecificAssetsDialog extends React.Component<Props, State> {
+  inputRef: HTMLInputElement | null = null;
+
   constructor(props: Props) {
     super(props);
     this.state = this._loadFrom(props.project);
   }
 
   _loadFrom(project: gdProject): State {
+    const platformSpecificAssets = project.getPlatformSpecificAssets();
     return {
+      thumbnailResourceName: platformSpecificAssets.get('liluo', 'thumbnail'),
       desktopIconResourceNames: desktopSizes.map(size =>
-        project.getPlatformSpecificAssets().get('desktop', `icon-${size}`)
+        platformSpecificAssets.get('desktop', `icon-${size}`)
       ),
       androidIconResourceNames: androidSizes.map(size =>
-        project.getPlatformSpecificAssets().get('android', `icon-${size}`)
+        platformSpecificAssets.get('android', `icon-${size}`)
       ),
+      androidWindowSplashScreenAnimatedIconResourceName: project
+        .getPlatformSpecificAssets()
+        .get('android', `windowSplashScreenAnimatedIcon`),
       iosIconResourceNames: iosSizes.map(size =>
-        project.getPlatformSpecificAssets().get('ios', `icon-${size}`)
+        platformSpecificAssets.get('ios', `icon-${size}`)
       ),
+      displayGamesPlatformThumbnailWarning: false,
     };
   }
 
-  componentWillReceiveProps(newProps: Props) {
+  // To be updated, see https://reactjs.org/docs/react-component.html#unsafe_componentwillreceiveprops.
+  UNSAFE_componentWillReceiveProps(newProps: Props) {
     if (
       (!this.props.open && newProps.open) ||
       (newProps.open && this.props.project !== newProps.project)
@@ -93,134 +104,149 @@ export default class PlatformSpecificAssetsDialog extends React.Component<
     }
   }
 
-  _generateFromFile = () => {
-    const { project, resourceSources, onChooseResource } = this.props;
+  _generateFromFile = async e => {
+    if (!this.inputRef || !this.inputRef.files || !this.inputRef.files[0]) {
+      console.error("Could't find selected file. Aborting icon generation.");
+      return;
+    }
+    const chosenFileAsBlobDataUrl = URL.createObjectURL(this.inputRef.files[0]);
+    const { project, resourceManagementProps } = this.props;
 
-    const sources = resourceSources.filter(source => source.kind === 'image');
-    if (!sources.length) return;
+    const resourcesManager = project.getResourcesManager();
 
-    onChooseResource({
-      // Should be updated once new sources are introduced in the desktop app.
-      // Search for "sources[0]" in the codebase for other places like this.
-      initialSourceName: sources[0].name,
-      multiSelection: false,
-      resourceKind: 'image',
-    }).then(resources => {
-      if (!resources.length || !path) {
-        return;
-      }
+    try {
+      const results = await Promise.all([
+        ...desktopSizes.map(async size => ({
+          resourceName: `desktop-icon-${size}.png`,
+          blobDataUrl: await resizeImage(chosenFileAsBlobDataUrl, {
+            width: size,
+            height: size,
+          }),
+        })),
+        ...androidSizes.map(async size => ({
+          resourceName: `android-icon-${size}.png`,
+          blobDataUrl: await resizeImage(chosenFileAsBlobDataUrl, {
+            width: size,
+            height: size,
+          }),
+        })),
+        (async () => ({
+          resourceName: 'android-windowSplashScreenAnimatedIcon.png',
+          blobDataUrl: await resizeImage(chosenFileAsBlobDataUrl, {
+            width: androidWindowSplashScreenAnimatedIconRecommendedSize,
+            height: androidWindowSplashScreenAnimatedIconRecommendedSize,
+            transparentBorderSize:
+              androidWindowSplashScreenAnimatedIconRecommendedSize / 6,
+          }),
+        }))(),
+        ...iosSizes.map(async size => ({
+          resourceName: `ios-icon-${size}.png`,
+          blobDataUrl: await resizeImage(chosenFileAsBlobDataUrl, {
+            width: size,
+            height: size,
+          }),
+        })),
+      ]);
 
-      const resourcesManager = project.getResourcesManager();
-      const projectPath = path.dirname(project.getProjectFile());
-      const fullPath = path.resolve(projectPath, resources[0].getFile());
-
-      // Important, we are responsible for deleting the resources that were given to us.
-      // Otherwise we have a memory leak.
-      resources.forEach(resource => resource.delete());
-
-      Promise.all([
-        ...desktopSizes.map(size =>
-          resizeImage(
-            fullPath,
-            path.join(projectPath, `desktop-icon-${size}.png`),
-            {
-              width: size,
-              height: size,
-            }
-          )
-        ),
-        ...androidSizes.map(size =>
-          resizeImage(
-            fullPath,
-            path.join(projectPath, `android-icon-${size}.png`),
-            {
-              width: size,
-              height: size,
-            }
-          )
-        ),
-        ...iosSizes.map(size =>
-          resizeImage(
-            fullPath,
-            path.join(projectPath, `ios-icon-${size}.png`),
-            {
-              width: size,
-              height: size,
-            }
-          )
-        ),
-      ]).then(results => {
-        if (results.indexOf(false) !== -1) {
-          showErrorBox({
-            message: 'Some icons could not be generated!',
-            rawError: undefined,
-            errorId: 'icon-generation-error',
-            doNotReport: true,
-          });
-          return;
-        }
-
-        // Add resources to the game
-        const allResourcesNames = [
-          ...desktopSizes.map(size => `desktop-icon-${size}.png`),
-          ...androidSizes.map(size => `android-icon-${size}.png`),
-          ...iosSizes.map(size => `ios-icon-${size}.png`),
-        ];
-        allResourcesNames.forEach(resourceName => {
-          if (!resourcesManager.hasResource(resourceName)) {
-            const imageResource = new gd.ImageResource();
-            imageResource.setFile(resourceName);
-            imageResource.setName(resourceName);
-
-            resourcesManager.addResource(imageResource);
-
-            // Important, we are responsible for deleting the resources that we created
-            // Otherwise we have a memory leak, as calling addResource is making a copy of the resource.
-            imageResource.delete();
-          } else {
-            resourcesManager.getResource(resourceName).setFile(resourceName);
-          }
+      results.forEach(({ resourceName, blobDataUrl }) => {
+        const metadata = JSON.stringify({
+          extension: '.png',
+          // Used in local app to define the path where to save the image on
+          // the file system.
+          localFilePath: `./assets/${resourceName}`,
         });
+        if (!resourcesManager.hasResource(resourceName)) {
+          const imageResource = new gd.ImageResource();
+          imageResource.setFile(blobDataUrl);
+          imageResource.setName(resourceName);
+          imageResource.setMetadata(metadata);
 
-        // Make sure the resources are (re)loaded.
-        ResourcesLoader.burstUrlsCacheForResources(project, allResourcesNames);
-        setTimeout(() => {
-          this.setState({
-            desktopIconResourceNames: desktopSizes.map(
-              size => `desktop-icon-${size}.png`
-            ),
-            androidIconResourceNames: androidSizes.map(
-              size => `android-icon-${size}.png`
-            ),
-            iosIconResourceNames: iosSizes.map(size => `ios-icon-${size}.png`),
-          });
-        }, 200 /* Let a bit of time so that image files can be found */);
+          resourcesManager.addResource(imageResource);
+
+          // Important, we are responsible for deleting the resources that we created
+          // Otherwise we have a memory leak, as calling addResource is making a copy of the resource.
+          imageResource.delete();
+        } else {
+          resourcesManager.getResource(resourceName).setFile(blobDataUrl);
+          resourcesManager.getResource(resourceName).setMetadata(metadata);
+        }
       });
-    });
+
+      await resourceManagementProps.onFetchNewlyAddedResources();
+
+      // Make sure the resources are (re)loaded.
+      ResourcesLoader.burstUrlsCacheForResources(
+        project,
+        results.map(({ resourceName }) => resourceName)
+      );
+      setTimeout(() => {
+        this.setState({
+          desktopIconResourceNames: desktopSizes.map(
+            size => `desktop-icon-${size}.png`
+          ),
+          androidIconResourceNames: androidSizes.map(
+            size => `android-icon-${size}.png`
+          ),
+          androidWindowSplashScreenAnimatedIconResourceName:
+            'android-windowSplashScreenAnimatedIcon.png',
+          iosIconResourceNames: iosSizes.map(size => `ios-icon-${size}.png`),
+        });
+      }, 200 /* Let a bit of time so that image files can be found */);
+    } catch (e) {
+      showErrorBox({
+        message: 'Some icons could not be generated.',
+        rawError: undefined,
+        errorId: 'icon-generation-error',
+        doNotReport: true,
+      });
+    } finally {
+      // Reset input value so that if the user selects the same file again,
+      // the onChange callback is called.
+      if (this.inputRef) {
+        this.inputRef.value = '';
+      }
+    }
   };
 
   onApply = () => {
     const { project } = this.props;
     const {
+      thumbnailResourceName,
       desktopIconResourceNames,
       androidIconResourceNames,
+      androidWindowSplashScreenAnimatedIconResourceName,
       iosIconResourceNames,
     } = this.state;
 
+    const platformSpecificAssets = project.getPlatformSpecificAssets();
+
+    platformSpecificAssets.set('liluo', `thumbnail`, thumbnailResourceName);
+
     desktopSizes.forEach((size, index) => {
-      project
-        .getPlatformSpecificAssets()
-        .set('desktop', `icon-${size}`, desktopIconResourceNames[index]);
+      platformSpecificAssets.set(
+        'desktop',
+        `icon-${size}`,
+        desktopIconResourceNames[index]
+      );
     });
     androidSizes.forEach((size, index) => {
-      project
-        .getPlatformSpecificAssets()
-        .set('android', `icon-${size}`, androidIconResourceNames[index]);
+      platformSpecificAssets.set(
+        'android',
+        `icon-${size}`,
+        androidIconResourceNames[index]
+      );
     });
+    platformSpecificAssets.set(
+      'android',
+      `windowSplashScreenAnimatedIcon`,
+      androidWindowSplashScreenAnimatedIconResourceName
+    );
     iosSizes.forEach((size, index) => {
-      project
-        .getPlatformSpecificAssets()
-        .set('ios', `icon-${size}`, iosIconResourceNames[index]);
+      platformSpecificAssets.set(
+        'ios',
+        `icon-${size}`,
+        iosIconResourceNames[index]
+      );
     });
 
     this.props.onApply();
@@ -234,65 +260,88 @@ export default class PlatformSpecificAssetsDialog extends React.Component<
         primary={false}
         onClick={this.props.onClose}
       />,
-      <FlatButton
+      <DialogPrimaryButton
         key="apply"
         label={<Trans>Apply</Trans>}
         primary={true}
-        keyboardFocused={true}
         onClick={this.onApply}
       />,
     ];
+    const { project, resourceManagementProps } = this.props;
     const {
-      project,
-      resourceSources,
-      onChooseResource,
-      resourceExternalEditors,
-    } = this.props;
-    const {
+      thumbnailResourceName,
       desktopIconResourceNames,
       androidIconResourceNames,
+      androidWindowSplashScreenAnimatedIconResourceName,
       iosIconResourceNames,
+      displayGamesPlatformThumbnailWarning,
     } = this.state;
 
     return (
       <Dialog
-        onApply={this.onApply}
         title={<Trans>Project icons</Trans>}
         actions={actions}
         open={this.props.open}
-        cannotBeDismissed={true}
         onRequestClose={this.props.onClose}
+        onApply={this.onApply}
       >
         <ColumnStackLayout noMargin>
-          <Line justifyContent="center">
-            {isResizeSupported() ? (
-              <RaisedButton
-                primary
-                label={<Trans>Generate icons from a file</Trans>}
-                onClick={this._generateFromFile}
-              />
-            ) : (
-              <Text>
+          <ResponsiveLineStackLayout
+            alignItems="center"
+            noMargin
+            noColumnMargin
+          >
+            <Text noMargin>
+              <Trans>Generate icons from a file:</Trans>
+            </Text>
+            <input
+              type="file"
+              onChange={this._generateFromFile}
+              ref={_inputRef => (this.inputRef = _inputRef)}
+            />
+          </ResponsiveLineStackLayout>
+          <Text size="sub-title">
+            <Trans>gd.games thumbnail</Trans>
+          </Text>
+          <ResourceSelectorWithThumbnail
+            floatingLabelText={`gd.games thumbnail (1920x1080 px)`}
+            project={project}
+            resourceManagementProps={resourceManagementProps}
+            resourceKind="image"
+            resourceName={thumbnailResourceName}
+            defaultNewResourceName={'Thumbnail'}
+            onChange={resourceName => {
+              this.setState({
+                thumbnailResourceName: resourceName,
+                displayGamesPlatformThumbnailWarning:
+                  resourceName !== this.state.thumbnailResourceName,
+              });
+            }}
+          />
+          {displayGamesPlatformThumbnailWarning ? (
+            <Line>
+              <AlertMessage kind="warning">
                 <Trans>
-                  Download GDevelop desktop version to generate the Android and
-                  iOS icons of your game.
+                  You're about to change the thumbnail displayed on gd.games for
+                  your game. Once you have applied changes here, you will then
+                  need to publish a new version of your game on gd.games so that
+                  this new thumbnail is used.
                 </Trans>
-              </Text>
-            )}
-          </Line>
-          <Text>
-            <Trans>Desktop (Windows, macOS and Linux) icon:</Trans>
+              </AlertMessage>
+            </Line>
+          ) : null}
+          <Text size="sub-title">
+            <Trans>Desktop (Windows, macOS and Linux) icon</Trans>
           </Text>
           {desktopSizes.map((size, index) => (
             <ResourceSelectorWithThumbnail
               key={size}
               floatingLabelText={`Desktop icon (${size}x${size} px)`}
               project={project}
-              resourceSources={resourceSources}
-              onChooseResource={onChooseResource}
-              resourceExternalEditors={resourceExternalEditors}
+              resourceManagementProps={resourceManagementProps}
               resourceKind="image"
               resourceName={desktopIconResourceNames[index]}
+              defaultNewResourceName={'DesktopIcon' + size}
               onChange={resourceName => {
                 const newIcons = [...desktopIconResourceNames];
                 newIcons[index] = resourceName;
@@ -302,19 +351,38 @@ export default class PlatformSpecificAssetsDialog extends React.Component<
               }}
             />
           ))}
-          <Text>
-            <Trans>Android icons:</Trans>
+          <Text size="sub-title">
+            <Trans>Android icons and Android 12+ splashscreen</Trans>
           </Text>
+          <I18n>
+            {({ i18n }) => (
+              <ResourceSelectorWithThumbnail
+                floatingLabelText={`Android 12+ splashscreen icon (576x576 px)`}
+                project={project}
+                resourceManagementProps={resourceManagementProps}
+                resourceKind="image"
+                resourceName={androidWindowSplashScreenAnimatedIconResourceName}
+                defaultNewResourceName={'AndroidSplashscreenIcon'}
+                onChange={resourceName => {
+                  this.setState({
+                    androidWindowSplashScreenAnimatedIconResourceName: resourceName,
+                  });
+                }}
+                helperMarkdownText={i18n._(
+                  t`The image should be at least 864x864px, and the logo must fit [within a circle of 576px](https://developer.android.com/guide/topics/ui/splash-screen#splash_screen_dimensions). Transparent borders are automatically added when generated to help ensuring this.`
+                )}
+              />
+            )}
+          </I18n>
           {androidSizes.map((size, index) => (
             <ResourceSelectorWithThumbnail
               key={size}
               floatingLabelText={`Android icon (${size}x${size} px)`}
               project={project}
-              resourceSources={resourceSources}
-              onChooseResource={onChooseResource}
-              resourceExternalEditors={resourceExternalEditors}
+              resourceManagementProps={resourceManagementProps}
               resourceKind="image"
               resourceName={androidIconResourceNames[index]}
+              defaultNewResourceName={'AndroidIcon' + size}
               onChange={resourceName => {
                 const newIcons = [...androidIconResourceNames];
                 newIcons[index] = resourceName;
@@ -324,19 +392,18 @@ export default class PlatformSpecificAssetsDialog extends React.Component<
               }}
             />
           ))}
-          <Text>
-            <Trans>iOS (iPhone and iPad) icons:</Trans>
+          <Text size="sub-title">
+            <Trans>iOS (iPhone and iPad) icons</Trans>
           </Text>
           {iosSizes.map((size, index) => (
             <ResourceSelectorWithThumbnail
               key={size}
               floatingLabelText={`iOS icon (${size}x${size} px)`}
               project={project}
-              resourceSources={resourceSources}
-              onChooseResource={onChooseResource}
+              resourceManagementProps={resourceManagementProps}
               resourceKind="image"
               resourceName={iosIconResourceNames[index]}
-              resourceExternalEditors={resourceExternalEditors}
+              defaultNewResourceName={'IosIcon' + size}
               onChange={resourceName => {
                 const newIcons = [...iosIconResourceNames];
                 newIcons[index] = resourceName;
@@ -351,3 +418,16 @@ export default class PlatformSpecificAssetsDialog extends React.Component<
     );
   }
 }
+
+const PlatformSpecificAssetsDialogWithErrorBoundary = (props: Props) => (
+  <ErrorBoundary
+    componentTitle={<Trans>Project icons</Trans>}
+    scope="project-icons"
+    onClose={props.onClose}
+    showOnTop
+  >
+    <PlatformSpecificAssetsDialog {...props} />
+  </ErrorBoundary>
+);
+
+export default PlatformSpecificAssetsDialogWithErrorBoundary;

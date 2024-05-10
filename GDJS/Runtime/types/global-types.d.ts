@@ -21,6 +21,8 @@ declare type ObjectsLists = Hashtable<gdjs.RuntimeObject[]>;
  * if any. If the JavaScript code is running in a scene, this will be undefined (so you can't use this in a scene).
  */
 declare type EventsFunctionContext = {
+  task?: gdjs.ManuallyResolvableTask;
+
   /**  Get the list of instances of the specified object. */
   getObjects: (objectName: string) => Array<gdjs.RuntimeObject>;
 
@@ -36,6 +38,9 @@ declare type EventsFunctionContext = {
 
   /**  Create a new object from its name. The object is added to the instances living on the scene. */
   createObject: (objectName: string) => gdjs.RuntimeObject;
+
+  /** Return the number of instances of the specified object on the scene. */
+  getInstancesCountOnScene: (objectName: string) => integer;
 
   /**  Get the value (string or number) of an argument that was passed to the events function. To get objects, use `getObjects`. */
   getArgument: (argumentName: string) => string | number;

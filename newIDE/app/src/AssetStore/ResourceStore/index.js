@@ -2,7 +2,6 @@
 import * as React from 'react';
 import SearchBar from '../../UI/SearchBar';
 import { Column, Line } from '../../UI/Grid';
-import Background from '../../UI/Background';
 import ScrollView from '../../UI/ScrollView';
 import { type Resource } from '../../Utils/GDevelopServices/Asset';
 import { FiltersChooser } from '../../UI/Search/FiltersChooser';
@@ -11,13 +10,11 @@ import { BoxSearchResults } from '../../UI/Search/BoxSearchResults';
 import { ResourceCard } from './ResourceCard';
 import Subheader from '../../UI/Subheader';
 import { CategoryChooser } from '../../UI/Search/CategoryChooser';
-import { Trans } from '@lingui/macro';
+import { t, Trans } from '@lingui/macro';
+import Paper from '../../UI/Paper';
 
 const styles = {
-  searchBar: {
-    // TODO: Can we put this in the search bar by default?
-    flexShrink: 0,
-  },
+  paper: { width: 250 },
 };
 
 type Props = {
@@ -49,41 +46,49 @@ export const ResourceStore = ({ onChoose, resourceKind }: Props) => {
 
   return (
     <Column expand noMargin useFullHeight>
-      <SearchBar
-        value={searchText}
-        onChange={setSearchText}
-        onRequestSearch={() => {}}
-        style={styles.searchBar}
-      />
+      <Line>
+        <Column expand noMargin>
+          <SearchBar
+            value={searchText}
+            onChange={setSearchText}
+            onRequestSearch={() => {}}
+            placeholder={t`Search resources`}
+          />
+        </Column>
+      </Line>
       <Line
         expand
         overflow={
           'hidden' /* Somehow required on Chrome/Firefox to avoid children growing (but not on Safari) */
         }
+        noMargin
       >
-        <Background noFullHeight noExpand width={250}>
+        <Column noMargin>
           <ScrollView>
-            <Subheader>
-              <Trans>Categories</Trans>
-            </Subheader>
-            <CategoryChooser
-              allItemsLabel={<Trans>All assets</Trans>}
-              allFilters={filters}
-              filtersState={filtersState}
-              error={error}
-            />
-            <Subheader>
-              <Trans>Filters</Trans>
-            </Subheader>
-            <FiltersChooser
-              allFilters={filters}
-              filtersState={filtersState}
-              error={error}
-            />
+            <Paper style={styles.paper} background="medium">
+              <Subheader>
+                <Trans>Categories</Trans>
+              </Subheader>
+              <CategoryChooser
+                allItemsLabel={<Trans>All assets</Trans>}
+                allFilters={filters}
+                filtersState={filtersState}
+                error={error}
+              />
+              <Subheader>
+                <Trans>Filters</Trans>
+              </Subheader>
+              <FiltersChooser
+                allFilters={filters}
+                filtersState={filtersState}
+                error={error}
+              />
+            </Paper>
           </ScrollView>
-        </Background>
+        </Column>
         <BoxSearchResults
           baseSize={128}
+          spacing={8}
           onRetry={fetchResourcesAndFilters}
           error={error}
           searchItems={searchResultsForResourceKind}

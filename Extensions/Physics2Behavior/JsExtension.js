@@ -1,4 +1,5 @@
-// @flow
+//@ts-check
+/// <reference path="../JsExtensionTypes.d.ts" />
 /**
  * This is a declaration of an extension for GDevelop 5.
  *
@@ -12,18 +13,9 @@
  * More information on https://github.com/4ian/GDevelop/blob/master/newIDE/README-extensions.md
  */
 
-/*::
-// Import types to allow Flow to do static type checking on this file.
-// Extensions declaration are typed using Flow (like the editor), but the files
-// for the game engine are checked with TypeScript annotations.
-import { type ObjectsRenderingService, type ObjectsEditorService } from '../JsExtensionTypes.flow.js'
-*/
-
+/** @type {ExtensionModule} */
 module.exports = {
-  createExtension: function (
-    _ /*: (string) => string */,
-    gd /*: libGDevelop */
-  ) {
+  createExtension: function (_, gd) {
     const extension = new gd.PlatformExtension();
     extension
       .setExtensionInformation(
@@ -33,10 +25,14 @@ module.exports = {
         'Florian Rival, Franco Maciel',
         'MIT'
       )
-      .setExtensionHelpPath('/behaviors/physics2');
+      .setExtensionHelpPath('/behaviors/physics2')
+      .setCategory('Movement')
+      .setTags('physics, gravity, obstacle, collision');
+    extension
+      .addInstructionOrExpressionGroupMetadata(_('Physics Engine 2.0'))
+      .setIcon('res/physics32.png');
 
     var physics2Behavior = new gd.BehaviorJsImplementation();
-    // $FlowExpectedError - ignore Flow warning as we're creating a behavior
     physics2Behavior.updateProperty = function (
       behaviorContent,
       propertyName,
@@ -46,104 +42,138 @@ module.exports = {
         behaviorContent.getChild('bodyType').setStringValue(newValue);
         return true;
       }
+
       if (propertyName === 'bullet') {
         behaviorContent.getChild('bullet').setBoolValue(newValue === '1');
         return true;
       }
+
       if (propertyName === 'fixedRotation') {
         behaviorContent
           .getChild('fixedRotation')
           .setBoolValue(newValue === '1');
         return true;
       }
+
       if (propertyName === 'canSleep') {
         behaviorContent.getChild('canSleep').setBoolValue(newValue === '1');
         return true;
       }
+
       if (propertyName === 'shape') {
         behaviorContent.getChild('shape').setStringValue(newValue);
         return true;
       }
+
       if (propertyName === 'shapeDimensionA') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('shapeDimensionA').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('shapeDimensionA')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'shapeDimensionB') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('shapeDimensionB').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('shapeDimensionB')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'shapeOffsetX') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('shapeOffsetX').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('shapeOffsetX')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'shapeOffsetY') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('shapeOffsetY').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('shapeOffsetY')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'polygonOrigin') {
         behaviorContent.addChild('polygonOrigin').setStringValue(newValue);
         return true;
       }
+
       if (propertyName === 'vertices') {
         behaviorContent.addChild('vertices');
-        // $FlowFixMe
         behaviorContent.setChild('vertices', gd.Serializer.fromJSON(newValue));
         return true;
       }
+
       if (propertyName === 'density') {
         behaviorContent
           .getChild('density')
           .setDoubleValue(parseFloat(newValue));
         return true;
       }
+
       if (propertyName === 'friction') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('friction').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent.getChild('friction').setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'restitution') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('restitution').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('restitution')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'linearDamping') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('linearDamping').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('linearDamping')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'angularDamping') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('angularDamping').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('angularDamping')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'gravityScale') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        behaviorContent.getChild('gravityScale').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        behaviorContent
+          .getChild('gravityScale')
+          .setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'layers') {
         behaviorContent.getChild('layers').setIntValue(parseInt(newValue, 10));
         return true;
       }
+
       if (propertyName === 'masks') {
         behaviorContent.getChild('masks').setIntValue(parseInt(newValue, 10));
         return true;
       }
+
+      return false;
     };
-    // $FlowExpectedError - ignore Flow warning as we're creating a behavior
     physics2Behavior.getProperties = function (behaviorContent) {
       var behaviorProperties = new gd.MapStringPropertyDescriptor();
 
@@ -196,6 +226,7 @@ module.exports = {
             .toString(10)
         )
         .setType('Number')
+        .setMeasurementUnit(gd.MeasurementUnit.getPixel())
         .setLabel('Shape Dimension A');
       behaviorProperties
         .getOrCreate('shapeDimensionB')
@@ -206,6 +237,7 @@ module.exports = {
             .toString(10)
         )
         .setType('Number')
+        .setMeasurementUnit(gd.MeasurementUnit.getPixel())
         .setLabel('Shape Dimension B');
       behaviorProperties
         .getOrCreate('shapeOffsetX')
@@ -213,6 +245,7 @@ module.exports = {
           behaviorContent.getChild('shapeOffsetX').getDoubleValue().toString(10)
         )
         .setType('Number')
+        .setMeasurementUnit(gd.MeasurementUnit.getPixel())
         .setLabel('Shape Offset X');
       behaviorProperties
         .getOrCreate('shapeOffsetY')
@@ -220,6 +253,7 @@ module.exports = {
           behaviorContent.getChild('shapeOffsetY').getDoubleValue().toString(10)
         )
         .setType('Number')
+        .setMeasurementUnit(gd.MeasurementUnit.getPixel())
         .setLabel('Shape Offset Y');
       behaviorProperties
         .getOrCreate('polygonOrigin')
@@ -303,7 +337,6 @@ module.exports = {
       return behaviorProperties;
     };
 
-    // $FlowExpectedError - ignore Flow warning as we're creating a behavior
     physics2Behavior.initializeContent = function (behaviorContent) {
       behaviorContent.addChild('bodyType').setStringValue('Dynamic');
       behaviorContent.addChild('bullet').setBoolValue(false);
@@ -327,40 +360,41 @@ module.exports = {
     };
 
     var sharedData = new gd.BehaviorSharedDataJsImplementation();
-    // $FlowExpectedError - ignore Flow warning as we're creating a behavior
     sharedData.updateProperty = function (
       sharedContent,
       propertyName,
       newValue
     ) {
       if (propertyName === 'gravityX') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        sharedContent.getChild('gravityX').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        sharedContent.getChild('gravityX').setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'gravityY') {
-        newValue = parseFloat(newValue);
-        if (newValue !== newValue) return false;
-        sharedContent.getChild('gravityY').setDoubleValue(newValue);
+        const newValueAsNumber = parseFloat(newValue);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        sharedContent.getChild('gravityY').setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'scaleX') {
-        newValue = parseInt(newValue, 10);
-        if (newValue !== newValue) return false;
-        sharedContent.getChild('scaleX').setDoubleValue(newValue);
+        const newValueAsNumber = parseInt(newValue, 10);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        sharedContent.getChild('scaleX').setDoubleValue(newValueAsNumber);
         return true;
       }
+
       if (propertyName === 'scaleY') {
-        newValue = parseInt(newValue, 10);
-        if (newValue !== newValue) return false;
-        sharedContent.getChild('scaleY').setDoubleValue(newValue);
+        const newValueAsNumber = parseInt(newValue, 10);
+        if (newValueAsNumber !== newValueAsNumber) return false;
+        sharedContent.getChild('scaleY').setDoubleValue(newValueAsNumber);
         return true;
       }
 
       return false;
     };
-    // $FlowExpectedError - ignore Flow warning as we're creating a behavior
     sharedData.getProperties = function (sharedContent) {
       var sharedProperties = new gd.MapStringPropertyDescriptor();
 
@@ -369,13 +403,15 @@ module.exports = {
         .setValue(
           sharedContent.getChild('gravityX').getDoubleValue().toString(10)
         )
-        .setType('Number');
+        .setType('Number')
+        .setMeasurementUnit(gd.MeasurementUnit.getNewton());
       sharedProperties
         .getOrCreate('gravityY')
         .setValue(
           sharedContent.getChild('gravityY').getDoubleValue().toString(10)
         )
-        .setType('Number');
+        .setType('Number')
+        .setMeasurementUnit(gd.MeasurementUnit.getNewton());
       sharedProperties
         .getOrCreate('scaleX')
         .setValue(
@@ -391,7 +427,6 @@ module.exports = {
 
       return sharedProperties;
     };
-    // $FlowExpectedError - ignore Flow warning as we're creating a behavior
     sharedData.initializeContent = function (behaviorContent) {
       behaviorContent.addChild('gravityX').setDoubleValue(0);
       behaviorContent.addChild('gravityY').setDoubleValue(9.8);
@@ -406,16 +441,20 @@ module.exports = {
         _('Physics Engine 2.0'),
         'Physics2',
         _(
-          'Simulate realistic object physics, with gravity, forces, joints, etc.'
+          'Simulate realistic object physics with gravity, forces, joints, etc.'
         ),
         '',
         'res/physics32.png',
         'Physics2Behavior',
+        //@ts-ignore The class hierarchy is incorrect leading to a type error, but this is valid.
         physics2Behavior,
         sharedData
       )
       .setIncludeFile('Extensions/Physics2Behavior/physics2runtimebehavior.js')
-      .addIncludeFile('Extensions/Physics2Behavior/box2d.js');
+      .addIncludeFile('Extensions/Physics2Behavior/Box2D_v2.3.1_min.wasm.js')
+      .addRequiredFile(
+        'Extensions/Physics2Behavior/Box2D_v2.3.1_min.wasm.wasm'
+      );
 
     // Global
     aut
@@ -425,12 +464,17 @@ module.exports = {
         _('Compare the world gravity on X axis.'),
         _('the world gravity on X axis'),
         _('Global'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Gravity to compare to (in pixels per second per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getGravityX');
 
@@ -440,7 +484,7 @@ module.exports = {
         _('World gravity on X axis'),
         _('World gravity on X axis'),
         _('Global'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -454,12 +498,17 @@ module.exports = {
         _('Compare the world gravity on Y axis.'),
         _('the world gravity on Y axis'),
         _('Global'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Gravity to compare to (in pixels per second per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getGravityY');
 
@@ -469,7 +518,7 @@ module.exports = {
         _('World gravity on Y axis'),
         _('World gravity on Y axis'),
         _('Global'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -487,8 +536,8 @@ module.exports = {
           ),
         _('Set the world gravity of _PARAM0_ to _PARAM2_;_PARAM3_'),
         _('Global'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -504,12 +553,17 @@ module.exports = {
         _('Compare the world time scale.'),
         _('the world time scale'),
         _('Global'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Time scale to compare to (1 by default)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getTimeScale');
 
@@ -525,14 +579,15 @@ module.exports = {
           ),
         _('Set the world time scale of _PARAM0_ to _PARAM2_'),
         _('Global'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('objectList', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .addParameter('expression', _('Value'))
+      .addParameter('expression', _('Time scale (1 by default)'))
       .getCodeExtraInformation()
-      .setIncludeFile('Extensions/Physics2Behavior/physics2tools.js')
+      .addIncludeFile('Extensions/Physics2Behavior/physics2tools.js')
+      .addIncludeFile('Extensions/Physics2Behavior/physics2runtimebehavior.js')
       .setFunctionName('gdjs.physics2.setTimeScale');
 
     aut
@@ -541,7 +596,7 @@ module.exports = {
         _('World time scale'),
         _('World time scale'),
         _('Global'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -556,8 +611,8 @@ module.exports = {
         _('Test if an object is dynamic.'),
         _('_PARAM0_ is dynamic'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -573,8 +628,8 @@ module.exports = {
         ),
         _('Set _PARAM0_ as dynamic'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -588,8 +643,8 @@ module.exports = {
         _('Test if an object is static.'),
         _('_PARAM0_ is static'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -605,8 +660,8 @@ module.exports = {
         ),
         _('Set _PARAM0_ as static'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -620,8 +675,8 @@ module.exports = {
         _('Test if an object is kinematic.'),
         _('_PARAM0_ is kinematic'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -637,8 +692,8 @@ module.exports = {
         ),
         _('Set _PARAM0_ as kinematic'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -652,8 +707,8 @@ module.exports = {
         _('Test if an object is being treat as a bullet.'),
         _('_PARAM0_ is bullet'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -669,8 +724,8 @@ module.exports = {
         ),
         _('Treat _PARAM0_ as bullet: _PARAM2_'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -686,8 +741,8 @@ module.exports = {
         _('Test if an object has fixed rotation.'),
         _('_PARAM0_ has fixed rotation'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -703,8 +758,8 @@ module.exports = {
         ),
         _('Set _PARAM0_ fixed rotation: _PARAM2_'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -720,8 +775,8 @@ module.exports = {
         _('Test if an object can sleep.'),
         _('_PARAM0_ can sleep'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -730,15 +785,15 @@ module.exports = {
 
     aut
       .addAction(
-        'SetSleepingaAllowed',
+        'SetSleepingAllowed',
         _('Sleeping allowed'),
         _(
           'Allow or not an object to sleep. If enabled the object will be able to sleep, improving performance for non-currently-moving objects.'
         ),
         _('Allow _PARAM0_ to sleep: _PARAM2_'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -747,6 +802,11 @@ module.exports = {
       .getCodeExtraInformation()
       .setFunctionName('setSleepingAllowed');
 
+    // Deprecated action (fixed typo):
+    aut
+      .addDuplicatedAction('SetSleepingaAllowed', 'SetSleepingAllowed')
+      .setHidden();
+
     aut
       .addCondition(
         'IsSleeping',
@@ -754,8 +814,8 @@ module.exports = {
         _('Test if an object is sleeping.'),
         _('_PARAM0_ is sleeping'),
         _('Dynamics'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -772,12 +832,17 @@ module.exports = {
         ),
         _('the shape scale'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Scale (1 by default)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('setShapeScale')
       .setGetter('getShapeScale');
@@ -789,12 +854,15 @@ module.exports = {
         _('Test an object density.'),
         _('the _PARAM0_ density'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getDensity');
 
@@ -807,12 +875,15 @@ module.exports = {
         ),
         _('the density'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setDensity')
       .setGetter('getDensity');
@@ -823,7 +894,7 @@ module.exports = {
         _('Density of the object'),
         _('Get the density of an object.'),
         _('Body settings'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -837,12 +908,15 @@ module.exports = {
         _('Test an object friction.'),
         _('the _PARAM0_ friction'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getFriction');
 
@@ -855,12 +929,15 @@ module.exports = {
         ),
         _('the friction'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setFriction')
       .setGetter('getFriction');
@@ -871,7 +948,7 @@ module.exports = {
         _('Friction of the object'),
         _('Get the friction of an object.'),
         _('Body settings'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -885,12 +962,15 @@ module.exports = {
         _('Test an object restitution.'),
         _('the _PARAM0_ restitution'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getRestitution');
 
@@ -903,12 +983,15 @@ module.exports = {
         ),
         _('the restitution'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setRestitution')
       .setGetter('getRestitution');
@@ -919,7 +1002,7 @@ module.exports = {
         _('Restitution of the object'),
         _('Get the restitution of an object.'),
         _('Body settings'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -933,12 +1016,15 @@ module.exports = {
         _('Test an object linear damping.'),
         _('the _PARAM0_ linear damping'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getLinearDamping');
 
@@ -951,12 +1037,15 @@ module.exports = {
         ),
         _('the linear damping'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setLinearDamping')
       .setGetter('getLinearDamping');
@@ -967,7 +1056,7 @@ module.exports = {
         _('Linear damping of the object'),
         _('Get the linear damping of an object.'),
         _('Body settings'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -981,12 +1070,15 @@ module.exports = {
         _('Test an object angular damping.'),
         _('the _PARAM0_ angular damping'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getAngularDamping');
 
@@ -999,12 +1091,15 @@ module.exports = {
         ),
         _('the angular damping'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setAngularDamping')
       .setGetter('getAngularDamping');
@@ -1015,7 +1110,7 @@ module.exports = {
         _('Angular damping of the object'),
         _('Get the angular damping of an object.'),
         _('Body settings'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1029,12 +1124,17 @@ module.exports = {
         _('Test an object gravity scale.'),
         _('the _PARAM0_ gravity scale'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Scale to compare to (1 by default)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getGravityScale');
 
@@ -1047,12 +1147,17 @@ module.exports = {
         ),
         _('the gravity scale'),
         _('Body settings'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Scale (1 by default)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('setGravityScale')
       .setGetter('getGravityScale');
@@ -1063,7 +1168,7 @@ module.exports = {
         _('Gravity scale of the object'),
         _('Get the gravity scale of an object.'),
         _('Body settings'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1078,8 +1183,8 @@ module.exports = {
         _('Test if an object has a specific layer enabled.'),
         _('_PARAM0_ has layer _PARAM2_ enabled'),
         _('Filtering'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1096,8 +1201,8 @@ module.exports = {
         ),
         _('Enable layer _PARAM2_ for _PARAM0_: _PARAM3_'),
         _('Filtering'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1114,8 +1219,8 @@ module.exports = {
         _('Test if an object has a specific mask enabled.'),
         _('_PARAM0_ has mask _PARAM2_ enabled'),
         _('Filtering'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1132,8 +1237,8 @@ module.exports = {
         ),
         _('Enable mask _PARAM2_ for _PARAM0_: _PARAM3_'),
         _('Filtering'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1151,12 +1256,17 @@ module.exports = {
         _('Test an object linear velocity on X.'),
         _('the linear velocity on X'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Speed to compare to (in pixels per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getLinearVelocityX');
 
@@ -1167,12 +1277,17 @@ module.exports = {
         _('Modify an object linear velocity on X.'),
         _('the linear velocity on X'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Speed (in pixels per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('setLinearVelocityX')
       .setGetter('getLinearVelocityX');
@@ -1183,7 +1298,7 @@ module.exports = {
         _('Linear velocity on X axis'),
         _('Get the linear velocity of an object on X axis.'),
         _('Velocity'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1197,12 +1312,17 @@ module.exports = {
         _('Test an object linear velocity on Y.'),
         _('the linear velocity on Y'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Speed to compare to (in pixels per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getLinearVelocityY');
 
@@ -1213,12 +1333,17 @@ module.exports = {
         _('Modify an object linear velocity on Y.'),
         _('the linear velocity on Y'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Speed (in pixels per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('setLinearVelocityY')
       .setGetter('getLinearVelocityY');
@@ -1229,7 +1354,7 @@ module.exports = {
         _('Linear velocity on Y axis'),
         _('Get the linear velocity of an object on Y axis.'),
         _('Velocity'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1243,12 +1368,17 @@ module.exports = {
         _('Test an object linear velocity length.'),
         _('the linear velocity length'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Speed to compare to (in pixels per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getLinearVelocityLength');
 
@@ -1258,7 +1388,7 @@ module.exports = {
         _('Linear velocity'),
         _('Get the linear velocity of an object.'),
         _('Velocity'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1267,17 +1397,76 @@ module.exports = {
 
     aut
       .addCondition(
+        'LinearVelocityAngle',
+        _('Linear velocity angle'),
+        _('Test an object linear velocity angle.'),
+        _('the linear velocity angle'),
+        _('Velocity'),
+        'res/physics32.png',
+        'res/physics32.png'
+      )
+      .addParameter('object', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Angle to compare to (in degrees)')
+        )
+      )
+      .getCodeExtraInformation()
+      .setFunctionName('getLinearVelocityAngle');
+
+    aut
+      .addAction(
+        'LinearVelocityAngle',
+        _('Linear velocity towards an angle'),
+        _('Set the linear velocity towards an angle.'),
+        _(
+          'Set the linear velocity of _PARAM0_ towards angle: _PARAM2_ degrees, speed: _PARAM3_ pixels per second'
+        ),
+        _('Velocity'),
+        'res/physics32.png',
+        'res/physics32.png'
+      )
+      .addParameter('object', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .addParameter('expression', _('Angle'))
+      .addParameter('expression', _('Speed (in pixels per second)'))
+      .getCodeExtraInformation()
+      .setFunctionName('setLinearVelocityAngle')
+      .setGetter('getLinearVelocityAngle');
+
+    aut
+      .addExpression(
+        'LinearVelocityAngle',
+        _('Linear velocity angle'),
+        _('Get the linear velocity angle of an object.'),
+        _('Velocity'),
+        'res/physics32.png'
+      )
+      .addParameter('object', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .getCodeExtraInformation()
+      .setFunctionName('getLinearVelocityAngle');
+
+    aut
+      .addCondition(
         'AngularVelocity',
         _('Angular velocity'),
         _('Test an object angular velocity.'),
         _('the angular velocity'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Angular speed to compare to (in degrees per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('getAngularVelocity');
 
@@ -1288,12 +1477,17 @@ module.exports = {
         _('Modify an object angular velocity.'),
         _('the angular velocity'),
         _('Velocity'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions().setDescription(
+          _('Angular speed (in degrees per second)')
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('setAngularVelocity')
       .setGetter('getAngularVelocity');
@@ -1304,7 +1498,7 @@ module.exports = {
         _('Angular velocity'),
         _('Get the angular velocity of an object.'),
         _('Velocity'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1317,19 +1511,27 @@ module.exports = {
         'ApplyForce',
         _('Apply force'),
         _(
-          'Apply a force to the object. You need to specify the point of application (you can get the body mass center through expressions).'
+          'Apply a force to the object over time. It "accelerates" an object and must be used every frame during a time period.'
         ),
         _('Apply to _PARAM0_ a force of _PARAM2_;_PARAM3_'),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('X component (N)'))
       .addParameter('expression', _('Y component (N)'))
-      .addParameter('expression', _('Applying X position'))
-      .addParameter('expression', _('Applying Y position'))
+      .setParameterLongDescription(
+        _('A force is like an acceleration but depends on the mass.')
+      )
+      .addParameter('expression', _('Application point on X axis'))
+      .addParameter('expression', _('Application point on Y axis'))
+      .setParameterLongDescription(
+        _(
+          'Use `MassCenterX` and `MassCenterY` expressions to avoid any rotation.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyForce');
 
@@ -1338,19 +1540,27 @@ module.exports = {
         'ApplyPolarForce',
         _('Apply force (angle)'),
         _(
-          'Apply a force to the object using polar coordinates. You need to specify the point of application (you can get the body mass center through expressions).'
+          'Apply a force to the object over time using polar coordinates. It "accelerates" an object and must be used every frame during a time period.'
         ),
         _('Apply to _PARAM0_ a force of angle _PARAM2_ and length _PARAM3_'),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Angle'))
       .addParameter('expression', _('Length (N)'))
-      .addParameter('expression', _('Applying X position'))
-      .addParameter('expression', _('Applying Y position'))
+      .setParameterLongDescription(
+        _('A force is like an acceleration but depends on the mass.')
+      )
+      .addParameter('expression', _('Application point on X axis'))
+      .addParameter('expression', _('Application point on Y axis'))
+      .setParameterLongDescription(
+        _(
+          'Use `MassCenterX` and `MassCenterY` expressions to avoid any rotation.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyPolarForce');
 
@@ -1359,22 +1569,30 @@ module.exports = {
         'ApplyForceTowardPosition',
         _('Apply force toward position'),
         _(
-          'Apply a force to the object to move it toward a position. You need to specify the point of application (you can get the body mass center through expressions).'
+          'Apply a force to the object over time to move it toward a position. It "accelerates" an object and must be used every frame during a time period.'
         ),
         _(
           'Apply to _PARAM0_ a force of length _PARAM2_ towards _PARAM3_;_PARAM4_'
         ),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Length (N)'))
+      .setParameterLongDescription(
+        _('A force is like an acceleration but depends on the mass.')
+      )
       .addParameter('expression', _('X position'))
       .addParameter('expression', _('Y position'))
-      .addParameter('expression', _('Applying X position'))
-      .addParameter('expression', _('Applying Y position'))
+      .addParameter('expression', _('Application point on X axis'))
+      .addParameter('expression', _('Application point on Y axis'))
+      .setParameterLongDescription(
+        _(
+          'Use `MassCenterX` and `MassCenterY` expressions to avoid any rotation.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyForceTowardPosition');
 
@@ -1383,19 +1601,27 @@ module.exports = {
         'ApplyImpulse',
         _('Apply impulse'),
         _(
-          'Apply an impulse to the object. You need to specify the point of application (you can get the body mass center through expressions).'
+          'Apply an impulse to the object. It instantly changes the speed, to give an initial speed for instance.'
         ),
         _('Apply to _PARAM0_ an impulse of _PARAM2_;_PARAM3_'),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .addParameter('expression', _('X component (N.m)'))
-      .addParameter('expression', _('Y component (N.m)'))
-      .addParameter('expression', _('Applying X position'))
-      .addParameter('expression', _('Applying Y position'))
+      .addParameter('expression', _('X component (N·s or kg·m·s⁻¹)'))
+      .addParameter('expression', _('Y component (N·s or kg·m·s⁻¹)'))
+      .setParameterLongDescription(
+        _('An impulse is like a speed addition but depends on the mass.')
+      )
+      .addParameter('expression', _('Application point on X axis'))
+      .addParameter('expression', _('Application point on Y axis'))
+      .setParameterLongDescription(
+        _(
+          'Use `MassCenterX` and `MassCenterY` expressions to avoid any rotation.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyImpulse');
 
@@ -1404,21 +1630,29 @@ module.exports = {
         'ApplyPolarImpulse',
         _('Apply impulse (angle)'),
         _(
-          'Apply an impulse to the object using polar coordinates. You need to specify the point of application (you can get the body mass center through expressions).'
+          'Apply an impulse to the object using polar coordinates. It instantly changes the speed, to give an initial speed for instance.'
         ),
         _(
           'Apply to _PARAM0_ an impulse of angle _PARAM2_ and length _PARAM3_ (applied at _PARAM4_;_PARAM5_)'
         ),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Angle'))
-      .addParameter('expression', _('Length (N.m)'))
-      .addParameter('expression', _('Applying X position'))
-      .addParameter('expression', _('Applying Y position'))
+      .addParameter('expression', _('Length (N·s or kg·m·s⁻¹)'))
+      .setParameterLongDescription(
+        _('An impulse is like a speed addition but depends on the mass.')
+      )
+      .addParameter('expression', _('Application point on X axis'))
+      .addParameter('expression', _('Application point on Y axis'))
+      .setParameterLongDescription(
+        _(
+          'Use `MassCenterX` and `MassCenterY` expressions to avoid any rotation.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyPolarImpulse');
 
@@ -1427,22 +1661,30 @@ module.exports = {
         'ApplyImpulseTowardPosition',
         _('Apply impulse toward position'),
         _(
-          'Apply an impulse to the object to move it toward a position. You need to specify the point of application (you can get the body mass center through expressions).'
+          'Apply an impulse to the object to move it toward a position. It instantly changes the speed, to give an initial speed for instance.'
         ),
         _(
           'Apply to _PARAM0_ an impulse of length _PARAM2_ towards _PARAM3_;_PARAM4_ (applied at _PARAM5_;_PARAM6_)'
         ),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .addParameter('expression', _('Length (N.m)'))
+      .addParameter('expression', _('Length (N·s or kg·m·s⁻¹)'))
+      .setParameterLongDescription(
+        _('An impulse is like a speed addition but depends on the mass.')
+      )
       .addParameter('expression', _('X position'))
       .addParameter('expression', _('Y position'))
-      .addParameter('expression', _('Applying X position'))
-      .addParameter('expression', _('Applying Y position'))
+      .addParameter('expression', _('Application point on X axis'))
+      .addParameter('expression', _('Application point on Y axis'))
+      .setParameterLongDescription(
+        _(
+          'Use `MassCenterX` and `MassCenterY` expressions to avoid any rotation.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyImpulseTowardPosition');
 
@@ -1451,16 +1693,19 @@ module.exports = {
         'ApplyTorque',
         _('Apply torque (rotational force)'),
         _(
-          'Apply a torque (also called "rotational force") to the object. This will make the object rotate without moving it.'
+          'Apply a torque (also called "rotational force") to the object. It "accelerates" an object rotation and must be used every frame during a time period.'
         ),
         _('Apply to _PARAM0_ a torque of _PARAM2_'),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .addParameter('expression', _('Torque (N.m)'))
+      .addParameter('expression', _('Torque (N·m)'))
+      .setParameterLongDescription(
+        _('A torque is like a rotation acceleration but depends on the mass.')
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyTorque');
 
@@ -1469,18 +1714,51 @@ module.exports = {
         'ApplyAngularImpulse',
         _('Apply angular impulse (rotational impulse)'),
         _(
-          'Apply an angular impulse (also called a "rotational impulse") to the object. This will make the object rotate without moving it.'
+          'Apply an angular impulse (also called a "rotational impulse") to the object. It instantly changes the rotation speed, to give an initial speed for instance.'
         ),
         _('Apply to _PARAM0_ an angular impulse of _PARAM2_'),
         _('Forces & impulses'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
-      .addParameter('expression', _('Angular impulse (N.m.s'))
+      .addParameter('expression', _('Angular impulse (N·m·s'))
+      .setParameterLongDescription(
+        _(
+          'An impulse is like a rotation speed addition but depends on the mass.'
+        )
+      )
       .getCodeExtraInformation()
       .setFunctionName('applyAngularImpulse');
+
+    aut
+      .addExpression(
+        'Mass',
+        _('Mass'),
+        _('Return the mass of the object (in kilograms)'),
+        '',
+        'res/physics32.png'
+      )
+      .addParameter('object', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .getCodeExtraInformation()
+      .setFunctionName('getMass');
+
+    aut
+      .addExpression(
+        'Inertia',
+        _('Inertia'),
+        _(
+          'Return the rotational inertia of the object (in kilograms * meters * meters)'
+        ),
+        '',
+        'res/physics32.png'
+      )
+      .addParameter('object', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .getCodeExtraInformation()
+      .setFunctionName('getInertia');
 
     aut
       .addExpression(
@@ -1488,7 +1766,7 @@ module.exports = {
         _('Mass center X'),
         _('Mass center X'),
         '',
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1501,7 +1779,7 @@ module.exports = {
         _('Mass center Y'),
         _('Mass center Y'),
         '',
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1516,8 +1794,8 @@ module.exports = {
         _('Test if an object is the first object on a joint.'),
         _('_PARAM0_ is the first object for joint _PARAM2_'),
         _('Joints'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1532,8 +1810,8 @@ module.exports = {
         _('Test if an object is the second object on a joint.'),
         _('_PARAM0_ is the second object for joint _PARAM2_'),
         _('Joints'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1547,7 +1825,7 @@ module.exports = {
         _('Joint first anchor X'),
         _('Joint first anchor X'),
         _('Joints'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1561,7 +1839,7 @@ module.exports = {
         _('Joint first anchor Y'),
         _('Joint first anchor Y'),
         _('Joints'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1575,7 +1853,7 @@ module.exports = {
         _('Joint second anchor X'),
         _('Joint second anchor X'),
         _('Joints'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1589,7 +1867,7 @@ module.exports = {
         _('Joint second anchor Y'),
         _('Joint second anchor Y'),
         _('Joints'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1604,13 +1882,16 @@ module.exports = {
         _('Test a joint reaction force.'),
         _('the joint _PARAM2_ reaction force'),
         _('Joints'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getJointReactionForce');
 
@@ -1620,7 +1901,7 @@ module.exports = {
         _('Joint reaction force'),
         _('Joint reaction force'),
         _('Joints'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1635,13 +1916,16 @@ module.exports = {
         _('Test a joint reaction torque.'),
         _('the joint _PARAM2_ reaction torque'),
         _('Joints'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardRelationalOperatorParameters('number')
+      .useStandardRelationalOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('getJointReactionTorque');
 
@@ -1651,7 +1935,7 @@ module.exports = {
         _('Joint reaction torque'),
         _('Joint reaction torque'),
         _('Joints'),
-        'res/physics16.png'
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1666,8 +1950,8 @@ module.exports = {
         _('Remove a joint from the scene.'),
         _('Remove joint _PARAM2_'),
         _('Joints'),
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
@@ -1745,7 +2029,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setDistanceJointLength')
       .setGetter('getDistanceJointLength');
@@ -1777,7 +2064,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setDistanceJointFrequency')
       .setGetter('getDistanceJointFrequency');
@@ -1809,7 +2099,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setDistanceJointDampingRatio')
       .setGetter('getDistanceJointDampingRatio');
@@ -2104,7 +2397,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setRevoluteJointMotorSpeed')
       .setGetter('getRevoluteJointMotorSpeed');
@@ -2136,7 +2432,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setRevoluteJointMaxMotorTorque')
       .setGetter('getRevoluteJointMaxMotorTorque');
@@ -2416,7 +2715,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setPrismaticJointMotorSpeed')
       .setGetter('getPrismaticJointMotorSpeed');
@@ -2448,7 +2750,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setPrismaticJointMaxMotorForce')
       .setGetter('getPrismaticJointMaxMotorForce');
@@ -2718,7 +3023,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setGearJointRatio')
       .setGetter('getGearJointRatio');
@@ -2845,7 +3153,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMouseJointMaxForce')
       .setGetter('getMouseJointMaxForce');
@@ -2877,7 +3188,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMouseJointFrequency')
       .setGetter('getMouseJointFrequency');
@@ -2909,7 +3223,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMouseJointDampingRatio')
       .setGetter('getMouseJointDampingRatio');
@@ -3078,7 +3395,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setWheelJointMotorSpeed')
       .setGetter('getWheelJointMotorSpeed');
@@ -3110,7 +3430,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setWheelJointMaxMotorTorque')
       .setGetter('getWheelJointMaxMotorTorque');
@@ -3156,7 +3479,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setWheelJointFrequency')
       .setGetter('getWheelJointFrequency');
@@ -3188,7 +3514,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setWheelJointDampingRatio')
       .setGetter('getWheelJointDampingRatio');
@@ -3284,7 +3613,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setWeldJointFrequency')
       .setGetter('getWeldJointFrequency');
@@ -3316,7 +3648,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setWeldJointDampingRatio')
       .setGetter('getWeldJointDampingRatio');
@@ -3391,7 +3726,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setRopeJointMaxLength')
       .setGetter('getRopeJointMaxLength');
@@ -3459,7 +3797,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setFrictionJointMaxForce')
       .setGetter('getFrictionJointMaxForce');
@@ -3491,7 +3832,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setFrictionJointMaxTorque')
       .setGetter('getFrictionJointMaxTorque');
@@ -3608,7 +3952,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMotorJointAngularOffset')
       .setGetter('getMotorJointAngularOffset');
@@ -3640,7 +3987,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMotorJointMaxForce')
       .setGetter('getMotorJointMaxForce');
@@ -3672,7 +4022,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMotorJointMaxTorque')
       .setGetter('getMotorJointMaxTorque');
@@ -3704,7 +4057,10 @@ module.exports = {
       .addParameter('object', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('expression', _('Joint ID'))
-      .useStandardOperatorParameters('number')
+      .useStandardOperatorParameters(
+        'number',
+        gd.ParameterOptions.makeNewOptions()
+      )
       .getCodeExtraInformation()
       .setFunctionName('setMotorJointCorrectionFactor')
       .setGetter('getMotorJointCorrectionFactor');
@@ -3728,27 +4084,80 @@ module.exports = {
       .addCondition(
         'Collision',
         _('Collision'),
-        _('Test if two objects collide.'),
+        _('Check if two objects collide.'),
         _('_PARAM0_ is colliding with _PARAM2_'),
         '',
-        'res/physics24.png',
-        'res/physics16.png'
+        'res/physics32.png',
+        'res/physics32.png'
       )
       .addParameter('objectList', _('Object'), '', false)
       .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
       .addParameter('objectList', _('Object'), '', false)
       .addCodeOnlyParameter('conditionInverted', '')
       .getCodeExtraInformation()
-      .setIncludeFile('Extensions/Physics2Behavior/physics2tools.js')
+      .addIncludeFile('Extensions/Physics2Behavior/physics2tools.js')
+      .addIncludeFile('Extensions/Physics2Behavior/physics2runtimebehavior.js')
       .setFunctionName('gdjs.physics2.objectsCollide');
+
+    extension
+      .addCondition(
+        'CollisionStarted',
+        _('Collision started'),
+        _('Check if two objects just started colliding during this frame.'),
+        _('_PARAM0_ started colliding with _PARAM2_'),
+        _('Collision'),
+        'res/physics32.png',
+        'res/physics32.png'
+      )
+      .addParameter('objectList', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .addParameter('objectList', _('Object'), '', false)
+      .addCodeOnlyParameter('conditionInverted', '')
+      .getCodeExtraInformation()
+      .addIncludeFile('Extensions/Physics2Behavior/physics2tools.js')
+      .addIncludeFile('Extensions/Physics2Behavior/physics2runtimebehavior.js')
+      .setFunctionName('gdjs.physics2.haveObjectsStartedColliding');
+
+    extension
+      .addCondition(
+        'CollisionStopped',
+        _('Collision stopped'),
+        _('Check if two objects just stopped colliding at this frame.'),
+        _('_PARAM0_ stopped colliding with _PARAM2_'),
+        _('Collision'),
+        'res/physics32.png',
+        'res/physics32.png'
+      )
+      .addParameter('objectList', _('Object'), '', false)
+      .addParameter('behavior', _('Behavior'), 'Physics2Behavior')
+      .addParameter('objectList', _('Object'), '', false)
+      .addCodeOnlyParameter('conditionInverted', '')
+      .getCodeExtraInformation()
+      .addIncludeFile('Extensions/Physics2Behavior/physics2tools.js')
+      .addIncludeFile('Extensions/Physics2Behavior/physics2runtimebehavior.js')
+      .setFunctionName('gdjs.physics2.haveObjectsStoppedColliding');
 
     return extension;
   },
 
-  runExtensionSanityTests: function (
-    gd /*: libGDevelop */,
-    extension /*: gdPlatformExtension*/
-  ) {
-    return [];
+  runExtensionSanityTests: function (gd, extension) {
+    const dummyBehavior = extension
+      .getBehaviorMetadata('Physics2::Physics2Behavior')
+      .get();
+    const sharedData = extension
+      .getBehaviorMetadata('Physics2::Physics2Behavior')
+      .getSharedDataInstance();
+    return [
+      gd.ProjectHelper.sanityCheckBehaviorProperty(
+        dummyBehavior,
+        'density',
+        '123'
+      ),
+      gd.ProjectHelper.sanityCheckBehaviorsSharedDataProperty(
+        sharedData,
+        'gravityY',
+        '456'
+      ),
+    ];
   },
 };

@@ -2,7 +2,7 @@
 import { Trans } from '@lingui/macro';
 
 import * as React from 'react';
-import { type EventsFunctionCreationParameters } from '../EventsFunctionsList';
+import { type EventsFunctionCreationParameters } from '../EventsFunctionsList/EventsFunctionTreeViewItemContent';
 import FlatButton from '../UI/FlatButton';
 import Subheader from '../UI/Subheader';
 import { List, ListItem } from '../UI/List';
@@ -11,12 +11,14 @@ import HelpButton from '../UI/HelpButton';
 import Create from '../UI/CustomSvgIcons/Behaviors/Create';
 import Step from '../UI/CustomSvgIcons/Behaviors/Step';
 import Destroy from '../UI/CustomSvgIcons/Behaviors/Destroy';
-import Function from '../UI/CustomSvgIcons/Behaviors/Function';
+import Action from '../UI/CustomSvgIcons/Behaviors/Action';
+import Condition from '../UI/CustomSvgIcons/Behaviors/Condition';
+import Expression from '../UI/CustomSvgIcons/Behaviors/Expression';
 import Activate from '../UI/CustomSvgIcons/Behaviors/Activate';
 import Deactivate from '../UI/CustomSvgIcons/Behaviors/Deactivate';
-import Visibility from '@material-ui/icons/Visibility';
-import VisibilityOff from '@material-ui/icons/VisibilityOff';
 import { Line } from '../UI/Grid';
+import Visibility from '../UI/CustomSvgIcons/Visibility';
+import VisibilityOff from '../UI/CustomSvgIcons/VisibilityOff';
 const gd: libGDevelop = global.gd;
 
 type Props = {|
@@ -65,9 +67,7 @@ export default function BehaviorMethodSelectorDialog({
 
   return (
     <Dialog
-      secondaryActions={[
-        <HelpButton key="help" helpPagePath="/events/functions" />,
-      ]}
+      title={<Trans>Choose a new extension function</Trans>}
       actions={[
         <FlatButton
           label={<Trans>Cancel</Trans>}
@@ -76,15 +76,15 @@ export default function BehaviorMethodSelectorDialog({
           key={'close'}
         />,
       ]}
-      cannotBeDismissed={false}
+      secondaryActions={[
+        <HelpButton key="help" helpPagePath="/events/functions" />,
+      ]}
       open
-      noMargin
-      title={<Trans>Choose a new extension function</Trans>}
       onRequestClose={onCancel}
     >
       <List>
         <FunctionListItem
-          icon={<Function style={styles.icon} />}
+          icon={<Action style={styles.icon} />}
           name={<Trans>Action</Trans>}
           onChoose={() =>
             onChoose({
@@ -100,7 +100,7 @@ export default function BehaviorMethodSelectorDialog({
           }
         />
         <FunctionListItem
-          icon={<Function style={styles.icon} />}
+          icon={<Condition style={styles.icon} />}
           name={<Trans>Condition</Trans>}
           onChoose={() =>
             onChoose({
@@ -116,7 +116,7 @@ export default function BehaviorMethodSelectorDialog({
           }
         />
         <FunctionListItem
-          icon={<Function style={styles.icon} />}
+          icon={<Expression style={styles.icon} />}
           name={<Trans>Expression</Trans>}
           onChoose={() =>
             onChoose({
@@ -276,14 +276,14 @@ export default function BehaviorMethodSelectorDialog({
       <Line justifyContent="center" alignItems="center">
         {!showAdvanced ? (
           <FlatButton
-            icon={<Visibility />}
+            leftIcon={<Visibility />}
             primary={false}
             onClick={() => setShowAdvanced(true)}
             label={<Trans>Show lifecycle functions (advanced)</Trans>}
           />
         ) : (
           <FlatButton
-            icon={<VisibilityOff />}
+            leftIcon={<VisibilityOff />}
             primary={false}
             onClick={() => setShowAdvanced(false)}
             label={<Trans>Hide lifecycle functions (advanced)</Trans>}

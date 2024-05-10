@@ -4,8 +4,11 @@
  * reserved. This project is released under the MIT License.
  */
 
-#ifndef INSTRUCTIONMETADATA_H
-#define INSTRUCTIONMETADATA_H
+#pragma once
+
+#include "AbstractFunctionMetadata.h"
+
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
@@ -13,6 +16,8 @@
 #include "GDCore/Events/Instruction.h"
 #include "GDCore/String.h"
 #include "ParameterMetadata.h"
+#include "ParameterOptions.h"
+
 namespace gd {
 class Project;
 class Layout;
@@ -30,7 +35,7 @@ namespace gd {
  *
  * \ingroup Events
  */
-class GD_CORE_API InstructionMetadata {
+class GD_CORE_API InstructionMetadata : public gd::AbstractFunctionMetadata {
  public:
   /**
    * Construct a new instruction metadata.
@@ -93,9 +98,87 @@ class GD_CORE_API InstructionMetadata {
    * Set that the instruction is private - it can't be used outside of the
    * object/ behavior that it is attached too.
    */
-  InstructionMetadata &SetPrivate() {
+  InstructionMetadata &SetPrivate() override {
     isPrivate = true;
     return *this;
+  }
+
+  /**
+   * Check if the instruction can be used in layouts or external events.
+   */
+  bool IsRelevantForLayoutEvents() const {
+    return relevantContext == "Any" || relevantContext == "Layout";
+  }
+
+  /**
+   * Check if the instruction can be used in function events.
+   */
+  bool IsRelevantForFunctionEvents() const {
+    return relevantContext == "Any" || relevantContext == "Function";
+  }
+
+  /**
+   * Check if the instruction can be used in asynchronous function events.
+   */
+  bool IsRelevantForAsynchronousFunctionEvents() const {
+    return relevantContext == "Any" || relevantContext == "Function" ||
+           relevantContext == "AsynchronousFunction";
+  }
+
+  /**
+   * Check if the instruction can be used in custom object events.
+   */
+  bool IsRelevantForCustomObjectEvents() const {
+    return relevantContext == "Any" || relevantContext == "Object";
+  }
+
+  /**
+   * Set that the instruction can be used in layouts or external events.
+   */
+  InstructionMetadata &SetRelevantForLayoutEventsOnly() override {
+    relevantContext = "Layout";
+    return *this;
+  }
+
+  /**
+   * Set that the instruction can be used in function events.
+   */
+  InstructionMetadata &SetRelevantForFunctionEventsOnly() override {
+    relevantContext = "Function";
+    return *this;
+  }
+
+  /**
+   * Set that the instruction can be used in asynchronous function events.
+   */
+  InstructionMetadata &SetRelevantForAsynchronousFunctionEventsOnly() override {
+    relevantContext = "AsynchronousFunction";
+    return *this;
+  }
+
+  /**
+   * Set that the instruction can be used in custom object events.
+   */
+  InstructionMetadata &SetRelevantForCustomObjectEventsOnly() override {
+    relevantContext = "Object";
+    return *this;
+  }
+
+  /**
+   * Check if the instruction is asynchronous - it will be running in the
+   * background, executing the instructions following it before the frame after
+   * it resolved.
+   */
+  bool IsAsync() const {
+    return !codeExtraInformation.asyncFunctionCallName.empty();
+  }
+
+  /**
+   * Check if the instruction asynchronicity is optional. If it is, it can
+   * either be used synchronously or asynchronously, with one function for each.
+   */
+  bool IsOptionallyAsync() const {
+    return IsAsync() && !codeExtraInformation.functionCallName.empty();
   }
 
   /**
@@ -111,7 +194,7 @@ class GD_CORE_API InstructionMetadata {
    *
    * Used mainly when an instruction is deprecated.
    */
-  InstructionMetadata &SetHidden() {
+  InstructionMetadata &SetHidden() override {
     hidden = true;
     return *this;
   }
@@ -138,18 +221,19 @@ class GD_CORE_API InstructionMetadata {
    * \param description Description for parameter
    * \param supplementaryInformation Additional information that can be used for
    * rendering or logic. For example:
-   * - If type is "object", this argument will describe which objects are allowed.
-   * If this argument is empty, all objects are allowed.
-   * - If type is "operator", this argument will be used to display only pertinent operators.
-   * \param parameterIsOptional true if the parameter must be optional, false
-   * otherwise.
+   * - If type is "object", this argument will describe which objects are
+   * allowed. If this argument is empty, all objects are allowed.
+   * - If type is "operator", this argument will be used to display only
+   * pertinent operators. \param parameterIsOptional true if the parameter must
+   * be optional, false otherwise.
    *
    * \see EventsCodeGenerator::GenerateParametersCodes
    */
-  InstructionMetadata &AddParameter(const gd::String &type,
-                                    const gd::String &label,
-                                    const gd::String &supplementaryInformation = "",
-                                    bool parameterIsOptional = false);
+  InstructionMetadata &AddParameter(
+      const gd::String &type,
+      const gd::String &label,
+      const gd::String &supplementaryInformation = "",
+      bool parameterIsOptional = false) override;
 
   /**
    * \brief Add a parameter not displayed in editor.
@@ -163,7 +247,7 @@ class GD_CORE_API InstructionMetadata {
    * \see EventsCodeGenerator::GenerateParametersCodes
    */
   InstructionMetadata &AddCodeOnlyParameter(
-      const gd::String &type, const gd::String &supplementaryInformation);
+      const gd::String &type, const gd::String &supplementaryInformation) override;
 
   /**
    * \brief Set the default value used in editor (or if an optional parameter is
@@ -171,7 +255,7 @@ class GD_CORE_API InstructionMetadata {
    *
    * \see AddParameter
    */
-  InstructionMetadata &SetDefaultValue(const gd::String &defaultValue_) {
+  InstructionMetadata &SetDefaultValue(const gd::String &defaultValue_) override {
     if (!parameters.empty()) parameters.back().SetDefaultValue(defaultValue_);
     return *this;
   };
@@ -183,11 +267,11 @@ class GD_CORE_API InstructionMetadata {
    * \see AddParameter
    */
   InstructionMetadata &SetParameterLongDescription(
-      const gd::String &longDescription) {
+      const gd::String &longDescription) override {
     if (!parameters.empty())
       parameters.back().SetLongDescription(longDescription);
     return *this;
-  };
+  }
 
   /**
    * \brief Set the additional information, used for some parameters
@@ -196,24 +280,30 @@ class GD_CORE_API InstructionMetadata {
    *
    * \see AddParameter
    */
-  InstructionMetadata &SetParameterExtraInfo(const gd::String &extraInfo) {
-    if (!parameters.empty())
-      parameters.back().SetExtraInfo(extraInfo);
+  InstructionMetadata &SetParameterExtraInfo(const gd::String &extraInfo) override {
+    if (!parameters.empty()) parameters.back().SetExtraInfo(extraInfo);
     return *this;
-  };
+  }
 
   /**
    * \brief Add the default parameters for an instruction manipulating the
    * specified type ("string", "number") with the default operators.
+   *
+   * \note The type "string" can be declined in several subtypes.
+   * \see ParameterMetadata
    */
-  InstructionMetadata &UseStandardOperatorParameters(const gd::String &type);
+  InstructionMetadata &UseStandardOperatorParameters(
+      const gd::String &type, const ParameterOptions &options);
 
   /**
    * \brief Add the default parameters for an instruction comparing the
    * specified type ("string", "number") with the default relational operators.
+   *
+   * \note The type "string" can be declined in several subtypes.
+   * \see ParameterMetadata
    */
   InstructionMetadata &UseStandardRelationalOperatorParameters(
-      const gd::String &type);
+      const gd::String &type, const ParameterOptions &options);
 
   /**
    * \brief Mark the instruction as an object instruction. Automatically called
@@ -236,15 +326,28 @@ class GD_CORE_API InstructionMetadata {
   /**
    * \brief Check if the instruction is an object instruction.
    */
-  bool IsObjectInstruction() const {
-    return isObjectInstruction;
-  }
+  bool IsObjectInstruction() const { return isObjectInstruction; }
 
   /**
    * \brief Check if the instruction is a behavior instruction.
    */
-  bool IsBehaviorInstruction() const {
-    return isBehaviorInstruction;
+  bool IsBehaviorInstruction() const { return isBehaviorInstruction; }
+
+  /**
+   * \brief Mark this (object) instruction as requiring the specified
+   * capability, offered by the base object. This is useful for some objects
+   * that don't support this capability, so that the editor can hide the
+   * instruction as it does not apply to them.
+   */
+  InstructionMetadata &SetRequiresBaseObjectCapability(
+      const gd::String &capability);
+
+  /**
+   * \brief Get the required specified capability for this (object) instruction,
+   * or an empty string if there is nothing specific required.
+   */
+  const gd::String &GetRequiredBaseObjectCapability() const {
+    return requiredBaseObjectCapability;
   }
 
   /**
@@ -281,156 +384,172 @@ class GD_CORE_API InstructionMetadata {
   /**
    * \brief Defines information about how generate the code for an instruction
    */
-  class ExtraInformation {
+  class ExtraInformation { 
    public:
     enum AccessType { Reference, MutatorAndOrAccessor, Mutators };
     ExtraInformation() : accessType(Reference), hasCustomCodeGenerator(false){};
     virtual ~ExtraInformation(){};
 
-    /**
-     * Set the function name which will be used when generating the code.
-     * \param functionName the name of the function to call
-     */
-    ExtraInformation &SetFunctionName(const gd::String &functionName_) {
-      functionCallName = functionName_;
-      return *this;
-    }
-
-    /**
-     * Declare if the instruction being declared is somewhat manipulating in a
-     * standard way.
-     */
-    ExtraInformation &SetManipulatedType(const gd::String &type_) {
-      type = type_;
-      return *this;
-    }
-
-    /**
-     * If InstructionMetadata::ExtraInformation::SetManipulatedType was called
-     * with "number" or "string", this function will tell the code generator the
-     * name of the getter function used to retrieve the data value.
-     *
-     * Usage example:
-     * \code
-     *  obj.AddAction("String",
-     *                 _("Change the string"),
-     *                 _("Change the string of a text"),
-     *                 _("the string"),
-     *                 _("Text"),
-     *                 "CppPlatform/Extensions/text24.png",
-     *                 "CppPlatform/Extensions/text.png");
-     *
-     *      .AddParameter("object", _("Object"), "Text", false)
-     *      .AddParameter("operator", _("Modification operator"), "string")
-     *      .AddParameter("string", _("String"))
-     *      .SetFunctionName("SetString").SetManipulatedType("string").SetGetter("GetString").SetIncludeFile("MyExtension/TextObject.h");
-     *
-     *  DECLARE_END_OBJECT_ACTION()
-     * \endcode
-     */
-    ExtraInformation &SetGetter(const gd::String &getter) {
-      optionalAssociatedInstruction = getter;
-      accessType = MutatorAndOrAccessor;
-      return *this;
-    }
-
-    ExtraInformation &SetMutators(
-        const std::map<gd::String, gd::String> &mutators) {
-      optionalMutators = mutators;
-      accessType = Mutators;
-      return *this;
-    }
-
-    /**
-     * \brief Erase any existing include file and add the specified include.
-     */
-    ExtraInformation &SetIncludeFile(const gd::String &includeFile) {
-      includeFiles.clear();
-      includeFiles.push_back(includeFile);
-      return *this;
-    }
-
-    /**
-     * \brief Add a file to the already existing include files.
-     */
-    ExtraInformation &AddIncludeFile(const gd::String &includeFile) {
-      if (std::find(includeFiles.begin(), includeFiles.end(), includeFile) ==
-          includeFiles.end())
-        includeFiles.push_back(includeFile);
-
-      return *this;
-    }
-
-    /**
-     * \brief Get the files that must be included to use the instruction.
-     */
-    const std::vector<gd::String> &GetIncludeFiles() const {
-      return includeFiles;
-    };
-
-    ExtraInformation &SetCustomCodeGenerator(
-        std::function<gd::String(Instruction &instruction,
-                                 gd::EventsCodeGenerator &codeGenerator,
-                                 gd::EventsCodeGenerationContext &context)>
-            codeGenerator) {
-      hasCustomCodeGenerator = true;
-      customCodeGenerator = codeGenerator;
-      return *this;
-    }
-
-    ExtraInformation &RemoveCustomCodeGenerator() {
-      hasCustomCodeGenerator = false;
-      std::function<gd::String(Instruction & instruction,
-                               gd::EventsCodeGenerator & codeGenerator,
-                               gd::EventsCodeGenerationContext & context)>
-          emptyFunction;
-      customCodeGenerator = emptyFunction;
-      return *this;
-    }
-
-    bool HasCustomCodeGenerator() const { return hasCustomCodeGenerator; }
-
+    // TODO Move these attributes to InstructionMetadata.
     gd::String functionCallName;
+    gd::String asyncFunctionCallName;
     gd::String type;
     AccessType accessType;
     gd::String optionalAssociatedInstruction;
     std::map<gd::String, gd::String> optionalMutators;
     bool hasCustomCodeGenerator;
     std::function<gd::String(Instruction &instruction,
-                             gd::EventsCodeGenerator &codeGenerator,
-                             gd::EventsCodeGenerationContext &context)>
+                              gd::EventsCodeGenerator &codeGenerator,
+                              gd::EventsCodeGenerationContext &context)>
         customCodeGenerator;
-
-   private:
     std::vector<gd::String> includeFiles;
   };
   ExtraInformation codeExtraInformation;  ///< Information about how generate
                                           ///< code for the instruction
 
   /**
+   * Set the name of the function which will be called in the generated code.
+   * \param functionName the name of the function to call.
+   */
+  InstructionMetadata &SetFunctionName(const gd::String &functionName_) override {
+    codeExtraInformation.functionCallName = functionName_;
+    return *this;
+  }
+
+  /**
+   * Set the name of the function, doing asynchronous work, which will be
+   * called in the generated code. This function should return an asynchronous
+   * task (i.e: `gdjs.AsyncTask` in the JavaScript runtime).
+   *
+   * \param functionName the name of the function doing asynchronous work to
+   * call.
+   */
+  InstructionMetadata &SetAsyncFunctionName(const gd::String &functionName_) {
+    codeExtraInformation.asyncFunctionCallName = functionName_;
+    return *this;
+  }
+
+  /**
+   * Return the name of the function which will be called in the generated code.
+   */
+  const gd::String &GetFunctionName() {
+    return codeExtraInformation.functionCallName;
+  }
+
+  /**
+   * Return the name of the function, doing asynchronous work, which will be
+   * called in the generated code. This function should return an asynchronous
+   * task (i.e: `gdjs.AsyncTask` in the JavaScript runtime).
+   */
+  const gd::String &GetAsyncFunctionName() {
+    return codeExtraInformation.asyncFunctionCallName;
+  }
+
+/**
+ * \brief Declare if the instruction being declared is somewhat manipulating
+ * in a standard way.
+ * 
+ * \param type "number" or "string"
+ */
+  InstructionMetadata &SetManipulatedType(const gd::String &type_) {
+    codeExtraInformation.type = type_;
+    return *this;
+  }
+
+  /**
+   * If InstructionMetadata::ExtraInformation::SetManipulatedType was called
+   * with "number" or "string", this function will tell the code generator the
+   * name of the getter function used to retrieve the data value.
+   *
+   * Usage example:
+   * \code
+   *  obj.AddAction("String",
+   *                 _("Change the string"),
+   *                 _("Change the string of a text"),
+   *                 _("the string"),
+   *                 _("Text"),
+   *                 "CppPlatform/Extensions/text24.png",
+   *                 "CppPlatform/Extensions/text_black.png");
+   *
+   *      .AddParameter("object", _("Object"), "Text", false)
+   *      .AddParameter("operator", _("Modification operator"), "string")
+   *      .AddParameter("string", _("String"))
+   *      .SetFunctionName("SetString").SetManipulatedType("string").SetGetter("GetString");
+   *
+   *  DECLARE_END_OBJECT_ACTION()
+   * \endcode
+   */
+  InstructionMetadata &SetGetter(const gd::String &getter) {
+    codeExtraInformation.optionalAssociatedInstruction = getter;
+    codeExtraInformation.accessType = codeExtraInformation.MutatorAndOrAccessor;
+    return *this;
+  }
+
+  InstructionMetadata &SetMutators(
+      const std::map<gd::String, gd::String> &mutators) {
+    codeExtraInformation.optionalMutators = mutators;
+    codeExtraInformation.accessType = codeExtraInformation.Mutators;
+    return *this;
+  }
+
+  /**
+   * \brief Erase any existing include file and add the specified include.
+   * \deprecated Use `AddIncludeFile` instead as clearing the list is more
+   * error prone.
+   */
+  InstructionMetadata &SetIncludeFile(const gd::String &includeFile) override {
+    codeExtraInformation.includeFiles.clear();
+    codeExtraInformation.includeFiles.push_back(includeFile);
+    return *this;
+  }
+
+  /**
+   * \brief Add a file to the already existing include files.
+   */
+  InstructionMetadata &AddIncludeFile(const gd::String &includeFile) override {
+    if (std::find(codeExtraInformation.includeFiles.begin(), codeExtraInformation.includeFiles.end(), includeFile) ==
+        codeExtraInformation.includeFiles.end())
+      codeExtraInformation.includeFiles.push_back(includeFile);
+
+    return *this;
+  }
+
+  /**
+   * \brief Get the files that must be included to use the instruction.
+   */
+  const std::vector<gd::String> &GetIncludeFiles() const override {
+    return codeExtraInformation.includeFiles;
+  };
+
+  InstructionMetadata &SetCustomCodeGenerator(
+      std::function<gd::String(Instruction &instruction,
+                                gd::EventsCodeGenerator &codeGenerator,
+                                gd::EventsCodeGenerationContext &context)>
+          codeGenerator) {
+    codeExtraInformation.hasCustomCodeGenerator = true;
+    codeExtraInformation.customCodeGenerator = codeGenerator;
+    return *this;
+  }
+
+  InstructionMetadata &RemoveCustomCodeGenerator() {
+    codeExtraInformation.hasCustomCodeGenerator = false;
+    std::function<gd::String(Instruction & instruction,
+                              gd::EventsCodeGenerator & codeGenerator,
+                              gd::EventsCodeGenerationContext & context)>
+        emptyFunction;
+    codeExtraInformation.customCodeGenerator = emptyFunction;
+    return *this;
+  }
+
+  bool HasCustomCodeGenerator() const { return codeExtraInformation.hasCustomCodeGenerator; }
+
+  /**
    * \brief Return the structure containing the information about code
    * generation for the instruction.
+   * 
+   * \deprecated
    */
-  ExtraInformation &GetCodeExtraInformation() { return codeExtraInformation; }
-
-  /**
-   * \brief Declare if the instruction being declared is somewhat manipulating
-   * in a standard way. \param type "number" or "string" \note Shortcut for
-   * `codeExtraInformation.SetManipulatedType(type)`.
-   */
-  ExtraInformation &SetManipulatedType(const gd::String &type_) {
-    return codeExtraInformation.SetManipulatedType(type_);
-  }
-
-  /**
-   * \brief Set the function that should be called when generating the source
-   * code from events.
-   * \param functionName the name of the function to call
-   * \note Shortcut for `codeExtraInformation.SetFunctionName`.
-   */
-  ExtraInformation &SetFunctionName(const gd::String &functionName) {
-    return codeExtraInformation.SetFunctionName(functionName);
-  }
+  InstructionMetadata &GetCodeExtraInformation() { return *this; }
 
   std::vector<ParameterMetadata> parameters;
 
@@ -450,8 +569,8 @@ class GD_CORE_API InstructionMetadata {
   bool isPrivate;
   bool isObjectInstruction;
   bool isBehaviorInstruction;
+  gd::String requiredBaseObjectCapability;
+  gd::String relevantContext;
 };
 
 }  // namespace gd
-
-#endif  // INSTRUCTIONMETADATA_H

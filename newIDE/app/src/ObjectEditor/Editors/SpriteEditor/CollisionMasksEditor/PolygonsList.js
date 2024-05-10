@@ -1,5 +1,6 @@
 // @flow
 import * as React from 'react';
+import { Trans, t } from '@lingui/macro';
 import {
   Table,
   TableBody,
@@ -8,7 +9,6 @@ import {
   TableRow,
   TableRowColumn,
 } from '../../../../UI/Table';
-import { SortableContainer, SortableElement } from 'react-sortable-hoc';
 import { mapVector } from '../../../../Utils/MapFor';
 import styles from './styles';
 import VerticeRow from './VerticeRow';
@@ -19,24 +19,26 @@ import {
 } from '../../../../UI/Accordion';
 import Text from '../../../../UI/Text';
 import IconButton from '../../../../UI/IconButton';
-import DeleteIcon from '@material-ui/icons/Delete';
-import WarningIcon from '@material-ui/icons/Warning';
-import AddIcon from '@material-ui/icons/Add';
 import FlatButton from '../../../../UI/FlatButton';
-import { Trans, t } from '@lingui/macro';
 import { Column, Line, Spacer } from '../../../../UI/Grid';
 import RaisedButtonWithSplitMenu from '../../../../UI/RaisedButtonWithSplitMenu';
 import AlertMessage from '../../../../UI/AlertMessage';
-import GDevelopThemeContext from '../../../../UI/Theme/ThemeContext';
+import GDevelopThemeContext from '../../../../UI/Theme/GDevelopThemeContext';
 import ScrollView from '../../../../UI/ScrollView';
-const gd = global.gd;
+import { addVertexOnLongestEdge } from './PolygonHelper';
+import Add from '../../../../UI/CustomSvgIcons/Add';
+import Trash from '../../../../UI/CustomSvgIcons/Trash';
+import Warning from '../../../../UI/CustomSvgIcons/Warning';
 
-const SortableVerticeRow = SortableElement(VerticeRow);
+const gd = global.gd;
 
 type VerticesTableProps = {|
   vertices: gdVectorVector2f,
   hasWarning: boolean,
   onUpdated: () => void,
+  onHoverVertice: (ptr: ?number) => void,
+  onClickVertice: (ptr: ?number) => void,
+  selectedVerticePtr: ?number,
 
   // Sprite size is useful to make sure polygon vertices
   // are not put outside the sprite bounding box, which is not supported:
@@ -45,33 +47,23 @@ type VerticesTableProps = {|
 |};
 
 const VerticesTable = (props: VerticesTableProps) => {
-  const updateVerticeX = (vertice, newValue) => {
-    // Ensure vertice stays inside the sprite bounding box.
+  const updateVerticeX = (vertice: gdVector2f, newValue: number) => {
+    // Ensure the vertex stays inside the sprite bounding box.
     vertice.set_x(Math.min(props.spriteWidth, Math.max(newValue, 0)));
     props.onUpdated();
   };
 
-  const updateVerticeY = (vertice, newValue) => {
-    // Ensure vertice stays inside the sprite bounding box.
+  const updateVerticeY = (vertice: gdVector2f, newValue: number) => {
+    // Ensure the vertex stays inside the sprite bounding box.
     vertice.set_y(Math.min(props.spriteHeight, Math.max(newValue, 0)));
     props.onUpdated();
   };
 
   return (
     <Column expand>
-      {props.hasWarning && (
-        <AlertMessage kind="warning">
-          <Trans>
-            The polygon is not convex. Ensure it is, otherwise the collision
-            mask won't work.
-          </Trans>
-        </AlertMessage>
-      )}
-      <Spacer />
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHeaderColumn />
             <TableHeaderColumn style={styles.coordinateColumn}>
               X
             </TableHeaderColumn>
@@ -82,17 +74,20 @@ const VerticesTable = (props: VerticesTableProps) => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {mapVector(props.vertices, (vertice, j) => (
-            <SortableVerticeRow
-              index={j}
-              key={j}
-              disabled
+          {mapVector(props.vertices, (vertice, verticeIndex) => (
+            <VerticeRow
+              key={vertice.ptr}
+              parentVerticeId={props.vertices.ptr.toString()}
+              onPointerEnter={() => props.onHoverVertice(vertice.ptr)}
+              onPointerLeave={props.onHoverVertice}
+              selected={props.selectedVerticePtr === vertice.ptr}
+              onClick={() => props.onClickVertice(vertice.ptr)}
               verticeX={vertice.get_x()}
               verticeY={vertice.get_y()}
               onChangeVerticeX={newValue => updateVerticeX(vertice, newValue)}
               onChangeVerticeY={newValue => updateVerticeY(vertice, newValue)}
               onRemove={() => {
-                gd.removeFromVectorVector2f(props.vertices, j);
+                gd.removeFromVectorVector2f(props.vertices, verticeIndex);
                 props.onUpdated();
               }}
               canRemove={props.vertices.size() > 3}
@@ -100,14 +95,21 @@ const VerticesTable = (props: VerticesTableProps) => {
           ))}
         </TableBody>
       </Table>
+      <Spacer />
+      {props.hasWarning && (
+        <AlertMessage kind="warning">
+          <Trans>
+            The polygon is not convex. Ensure it is, otherwise the collision
+            mask won't work.
+          </Trans>
+        </AlertMessage>
+      )}
       <Line justifyContent="center">
         <FlatButton
-          icon={<AddIcon size="small" />}
+          leftIcon={<Add />}
           label={<Trans>Add a vertex</Trans>}
           onClick={() => {
-            const newVertice = new gd.Vector2f();
-            props.vertices.push_back(newVertice);
-            newVertice.delete();
+            addVertexOnLongestEdge(props.vertices);
             props.onUpdated();
           }}
         />
@@ -116,12 +118,13 @@ const VerticesTable = (props: VerticesTableProps) => {
   );
 };
 
-const SortableVerticesTable = SortableContainer(VerticesTable);
-
 type PolygonSectionProps = {|
   polygon: gdPolygon2d,
   onUpdated: () => void,
   onRemove: () => void,
+  onHoverVertice: (ptr: ?number) => void,
+  onClickVertice: (ptr: ?number) => void,
+  selectedVerticePtr: ?number,
 
   // Sprite size is useful to make sure polygon vertices
   // are not put outside the sprite bounding box, which is not supported:
@@ -144,7 +147,7 @@ const PolygonSection = (props: PolygonSectionProps) => {
         size="small"
         tooltip={t`Polygon is not convex!`}
       >
-        <WarningIcon style={{ color: warningColor }} />
+        <Warning style={{ color: warningColor }} />
       </IconButton>
     ),
     <IconButton
@@ -156,7 +159,7 @@ const PolygonSection = (props: PolygonSectionProps) => {
       }}
       tooltip={t`Delete collision mask`}
     >
-      <DeleteIcon />
+      <Trash />
     </IconButton>,
   ];
 
@@ -164,24 +167,23 @@ const PolygonSection = (props: PolygonSectionProps) => {
     <Accordion defaultExpanded>
       <AccordionHeader actions={polygonActions}>
         <Text displayInlineAsSpan>
-          {verticesCount === 3 && `Triangle`}
-          {verticesCount === 4 && `Quadrilateral`}
-          {verticesCount >= 5 && `Polygon with ${verticesCount} vertices`}
+          {verticesCount === 3 && <Trans>Triangle</Trans>}
+          {verticesCount === 4 && <Trans>Quadrilateral</Trans>}
+          {verticesCount >= 5 && (
+            <Trans>Polygon with {verticesCount} vertices</Trans>
+          )}
         </Text>
       </AccordionHeader>
       <AccordionBody disableGutters>
-        <SortableVerticesTable
+        <VerticesTable
           vertices={vertices}
           hasWarning={!isConvex}
+          onHoverVertice={props.onHoverVertice}
+          onClickVertice={props.onClickVertice}
+          selectedVerticePtr={props.selectedVerticePtr}
           onUpdated={props.onUpdated}
           spriteWidth={props.spriteWidth}
           spriteHeight={props.spriteHeight}
-          onSortEnd={({ oldIndex, newIndex }) => {
-            // Reordering polygons is not supported for now
-          }}
-          helperClass="sortable-helper"
-          useDragHandle
-          lockToContainerEdges
         />
       </AccordionBody>
     </Accordion>
@@ -191,23 +193,30 @@ const PolygonSection = (props: PolygonSectionProps) => {
 type PolygonsListProps = {|
   polygons: gdVectorPolygon2d,
   onPolygonsUpdated: () => void,
-  restoreCollisionMask: () => void,
+  onSetFullImageCollisionMask: () => Promise<void>,
+  onSetAutomaticallyAdaptCollisionMasks: () => Promise<void>,
+  onHoverVertice: (ptr: ?number) => void,
+  onClickVertice: (ptr: ?number) => void,
+  selectedVerticePtr: ?number,
 
   // Sprite size is useful to make sure polygon vertices
   // are not put outside the sprite bounding box, which is not supported:
-  spriteWidth: number,
-  spriteHeight: number,
+  spriteSize: [number, number],
 |};
 
 const PolygonsList = (props: PolygonsListProps) => {
   const {
     polygons,
-    spriteHeight,
-    spriteWidth,
+    spriteSize,
     onPolygonsUpdated,
-    restoreCollisionMask,
+    onSetFullImageCollisionMask,
+    onSetAutomaticallyAdaptCollisionMasks,
+    onHoverVertice,
+    onClickVertice,
+    selectedVerticePtr,
   } = props;
 
+  const [spriteWidth, spriteHeight] = spriteSize;
   const addCollisionMask = React.useCallback(
     () => {
       const newPolygon = gd.Polygon2d.createRectangle(
@@ -219,6 +228,17 @@ const PolygonsList = (props: PolygonsListProps) => {
       onPolygonsUpdated();
     },
     [spriteHeight, spriteWidth, polygons, onPolygonsUpdated]
+  );
+
+  const onRemovePolygon = React.useCallback(
+    (index: number) => {
+      gd.removeFromVectorPolygon2d(polygons, index);
+      if (polygons.size() === 0) {
+        onSetFullImageCollisionMask();
+      }
+      onPolygonsUpdated();
+    },
+    [polygons, onPolygonsUpdated, onSetFullImageCollisionMask]
   );
 
   React.useEffect(
@@ -239,13 +259,10 @@ const PolygonsList = (props: PolygonsListProps) => {
               key={`polygon-${i}`}
               polygon={polygon}
               onUpdated={onPolygonsUpdated}
-              onRemove={() => {
-                gd.removeFromVectorPolygon2d(polygons, i);
-                if (polygons.size() === 0) {
-                  restoreCollisionMask();
-                }
-                onPolygonsUpdated();
-              }}
+              onRemove={() => onRemovePolygon(i)}
+              onHoverVertice={onHoverVertice}
+              onClickVertice={onClickVertice}
+              selectedVerticePtr={selectedVerticePtr}
               spriteWidth={spriteWidth}
               spriteHeight={spriteHeight}
             />
@@ -255,15 +272,17 @@ const PolygonsList = (props: PolygonsListProps) => {
           <Line alignItems="center" justifyContent="center">
             <RaisedButtonWithSplitMenu
               primary
-              icon={<AddIcon />}
+              icon={<Add />}
               label={<Trans>Add collision mask</Trans>}
-              onClick={() => {
-                addCollisionMask();
-              }}
+              onClick={addCollisionMask}
               buildMenuTemplate={i18n => [
                 {
-                  label: i18n._(t`Restore the default collision mask`),
-                  click: restoreCollisionMask,
+                  label: i18n._(t`Reset to automatic collision mask`),
+                  click: onSetAutomaticallyAdaptCollisionMasks,
+                },
+                {
+                  label: i18n._(t`Use full image as collision mask`),
+                  click: onSetFullImageCollisionMask,
                 },
               ]}
             />

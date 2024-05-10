@@ -23,11 +23,7 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
     // children, and in particular SceneEditor and InstancesEditor, to be notified when isActive
     // goes from true to false (in which case PIXI rendering is halted). If isActive was false
     // and remains false, it's safe to stop update here (PIXI rendering is already halted).
-    if (!this.props.isActive && !nextProps.isActive) {
-      return false;
-    }
-
-    return true;
+    return this.props.isActive || nextProps.isActive;
   }
 
   componentDidMount() {
@@ -49,7 +45,12 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
   }
 
   forceUpdateEditor() {
-    if (this.editor) this.editor.forceUpdateObjectsList();
+    const { editor } = this;
+    if (editor) {
+      editor.forceUpdateObjectsList();
+      editor.forceUpdateObjectGroupsList();
+      editor.forceUpdateLayersList();
+    }
   }
 
   getLayout(): ?gdLayout {
@@ -87,9 +88,8 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
     return (
       <SceneEditor
         setToolbar={this.props.setToolbar}
-        resourceSources={this.props.resourceSources}
-        onChooseResource={this.props.onChooseResource}
-        resourceExternalEditors={this.props.resourceExternalEditors}
+        resourceManagementProps={this.props.resourceManagementProps}
+        canInstallPrivateAsset={this.props.canInstallPrivateAsset}
         unsavedChanges={this.props.unsavedChanges}
         ref={editor => (this.editor = editor)}
         project={project}
@@ -97,11 +97,17 @@ export class SceneEditorContainer extends React.Component<RenderEditorContainerP
         initialInstances={layout.getInitialInstances()}
         getInitialInstancesEditorSettings={() =>
           prepareInstancesEditorSettings(
-            serializeToJSObject(layout.getAssociatedEditorSettings())
+            serializeToJSObject(layout.getAssociatedEditorSettings()),
+            Math.max(
+              project.getGameResolutionWidth(),
+              project.getGameResolutionHeight()
+            )
           )
         }
+        onOpenEvents={this.props.onOpenEvents}
         isActive={isActive}
         hotReloadPreviewButtonProps={this.props.hotReloadPreviewButtonProps}
+        openBehaviorEvents={this.props.openBehaviorEvents}
       />
     );
   }

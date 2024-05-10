@@ -15,6 +15,9 @@ class ExpressionMetadata;
 class ExpressionMetadata;
 class Platform;
 class PlatformExtension;
+class ObjectsContainersList;
+struct FunctionCallNode;
+struct ExpressionNode;
 }  // namespace gd
 
 namespace gd {
@@ -234,6 +237,23 @@ class GD_CORE_API MetadataProvider {
   static const gd::ExpressionMetadata& GetObjectAnyExpressionMetadata(
       const gd::Platform& platform, gd::String objectType, gd::String exprType);
 
+  static const gd::ExpressionMetadata& GetFunctionCallMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& node);
+
+  static const gd::ParameterMetadata* GetFunctionCallParameterMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& functionCall,
+    ExpressionNode& parameter);
+
+  static const gd::ParameterMetadata* GetFunctionCallParameterMetadata(
+    const gd::Platform& platform,
+    const gd::ObjectsContainersList &objectsContainersList,
+    FunctionCallNode& functionCall,
+    int parameterIndex);
+
   /**
    * Get information about an expression from its type.
    * Works for behavior expressions.
@@ -251,6 +271,10 @@ class GD_CORE_API MetadataProvider {
 
   static bool IsBadBehaviorMetadata(const gd::BehaviorMetadata& metadata) {
     return &metadata == &badBehaviorMetadata;
+  }
+
+  static bool IsBadObjectMetadata(const gd::ObjectMetadata& metadata) {
+    return &metadata == &badObjectInfo;
   }
 
   virtual ~MetadataProvider();

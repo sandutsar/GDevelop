@@ -14,25 +14,18 @@ type Props = {|
   hotReloadPreviewButtonProps: HotReloadPreviewButtonProps,
 |};
 
-export default (props: Props) => {
+const SceneVariablesDialog = (props: Props) => {
   return (
     <VariablesEditorDialog
+      project={props.project}
       open={props.open}
       variablesContainer={props.layout.getVariables()}
       onCancel={props.onClose}
       onApply={props.onApply}
-      title={<Trans>Scene Variables</Trans>}
-      emptyExplanationMessage={
-        <Trans>
-          Scene variables can be used to store any value or text during the
-          game.
-        </Trans>
-      }
-      emptyExplanationSecondMessage={
-        <Trans>
-          For example, you can have a variable called Score representing the
-          current score of the player.
-        </Trans>
+      title={<Trans>{props.layout.getName()} variables</Trans>}
+      emptyPlaceholderTitle={<Trans>Add your first scene variable</Trans>}
+      emptyPlaceholderDescription={
+        <Trans>These variables hold additional information on a scene.</Trans>
       }
       helpPagePath={'/all-features/variables/scene-variables'}
       hotReloadPreviewButtonProps={props.hotReloadPreviewButtonProps}
@@ -43,6 +36,9 @@ export default (props: Props) => {
           props.layout
         )
       }
+      id="scene-variables-dialog"
     />
   );
 };
+
+export default SceneVariablesDialog;

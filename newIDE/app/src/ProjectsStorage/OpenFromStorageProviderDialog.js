@@ -5,10 +5,12 @@ import * as React from 'react';
 import Dialog from '../UI/Dialog';
 import FlatButton from '../UI/FlatButton';
 import { type StorageProvider } from '.';
-import { List, ListItem } from '../UI/List';
+import { List } from '../UI/List';
 import optionalRequire from '../Utils/OptionalRequire';
 import BackgroundText from '../UI/BackgroundText';
 import { Column, Line } from '../UI/Grid';
+import StorageProviderListItem from './StorageProviderListItem';
+import AlertMessage from '../UI/AlertMessage';
 const electron = optionalRequire('electron');
 
 type Props = {|
@@ -22,12 +24,14 @@ const OpenFromStorageProviderDialog = ({
   storageProviders,
   onChooseProvider,
 }: Props) => {
+  const isCloudStorageProviderEnabled = storageProviders.some(
+    provider => provider.internalName === 'Cloud'
+  );
   return (
     <I18n>
       {({ i18n }) => (
         <Dialog
           title={<Trans>Choose where to load the project from</Trans>}
-          onRequestClose={onClose}
           actions={[
             <FlatButton
               label={<Trans>Cancel</Trans>}
@@ -36,31 +40,32 @@ const OpenFromStorageProviderDialog = ({
               onClick={onClose}
             />,
           ]}
-          cannotBeDismissed={false}
+          onRequestClose={onClose}
           open
-          noMargin
           maxWidth="sm"
         >
-          <List>
+          {isCloudStorageProviderEnabled && (
+            <AlertMessage kind="info">
+              <Trans>
+                You can find your cloud projects in the Build section of the
+                homepage.
+              </Trans>
+            </AlertMessage>
+          )}
+          <List useGap>
             {storageProviders
               .filter(storageProvider => !storageProvider.hiddenInOpenDialog)
               .map(storageProvider => (
-                <ListItem
+                <StorageProviderListItem
                   key={storageProvider.internalName}
-                  disabled={!!storageProvider.disabled}
-                  primaryText={i18n._(storageProvider.name)}
-                  leftIcon={
-                    storageProvider.renderIcon
-                      ? storageProvider.renderIcon()
-                      : undefined
-                  }
-                  onClick={() => onChooseProvider(storageProvider)}
+                  onChooseProvider={onChooseProvider}
+                  storageProvider={storageProvider}
                 />
               ))}
           </List>
           {!electron && (
             <Line>
-              <Column>
+              <Column noMargin>
                 <BackgroundText>
                   <Trans>
                     If you have a popup blocker interrupting the opening, allow

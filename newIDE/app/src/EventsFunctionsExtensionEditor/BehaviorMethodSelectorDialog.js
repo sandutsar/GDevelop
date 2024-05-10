@@ -2,7 +2,7 @@
 import { Trans } from '@lingui/macro';
 
 import * as React from 'react';
-import { type EventsFunctionCreationParameters } from '../EventsFunctionsList';
+import { type EventsFunctionCreationParameters } from '../EventsFunctionsList/EventsFunctionTreeViewItemContent';
 import FlatButton from '../UI/FlatButton';
 import Subheader from '../UI/Subheader';
 import { List, ListItem } from '../UI/List';
@@ -11,12 +11,14 @@ import HelpButton from '../UI/HelpButton';
 import Create from '../UI/CustomSvgIcons/Behaviors/Create';
 import Step from '../UI/CustomSvgIcons/Behaviors/Step';
 import Destroy from '../UI/CustomSvgIcons/Behaviors/Destroy';
-import Function from '../UI/CustomSvgIcons/Behaviors/Function';
+import Action from '../UI/CustomSvgIcons/Behaviors/Action';
+import Condition from '../UI/CustomSvgIcons/Behaviors/Condition';
+import Expression from '../UI/CustomSvgIcons/Behaviors/Expression';
 import Activate from '../UI/CustomSvgIcons/Behaviors/Activate';
 import Deactivate from '../UI/CustomSvgIcons/Behaviors/Deactivate';
 import { Line } from '../UI/Grid';
-import Visibility from '@material-ui/icons/Visibility';
-import VisibilityOff from '@material-ui/icons/VisibilityOff';
+import Visibility from '../UI/CustomSvgIcons/Visibility';
+import VisibilityOff from '../UI/CustomSvgIcons/VisibilityOff';
 const gd: libGDevelop = global.gd;
 
 type Props = {|
@@ -71,6 +73,7 @@ export default function BehaviorMethodSelectorDialog({
 
   return (
     <Dialog
+      title={<Trans>Choose a new behavior function ("method")</Trans>}
       secondaryActions={[
         <HelpButton
           key="help"
@@ -85,15 +88,12 @@ export default function BehaviorMethodSelectorDialog({
           key={'close'}
         />,
       ]}
-      cannotBeDismissed={false}
       open
-      noMargin
-      title={<Trans>Choose a new behavior function ("method")</Trans>}
       onRequestClose={onCancel}
     >
       <List>
         <ListItem
-          leftIcon={<Function style={styles.icon} />}
+          leftIcon={<Action style={styles.icon} />}
           primaryText={<Trans>Action</Trans>}
           secondaryText={
             <Trans>
@@ -110,7 +110,7 @@ export default function BehaviorMethodSelectorDialog({
           }
         />
         <ListItem
-          leftIcon={<Function style={styles.icon} />}
+          leftIcon={<Condition style={styles.icon} />}
           primaryText={<Trans>Condition</Trans>}
           secondaryText={
             <Trans>
@@ -127,7 +127,7 @@ export default function BehaviorMethodSelectorDialog({
           }
         />
         <ListItem
-          leftIcon={<Function style={styles.icon} />}
+          leftIcon={<Expression style={styles.icon} />}
           primaryText={<Trans>Expression</Trans>}
           secondaryText={
             <Trans>
@@ -236,14 +236,14 @@ export default function BehaviorMethodSelectorDialog({
       <Line justifyContent="center" alignItems="center">
         {!showAdvanced ? (
           <FlatButton
-            icon={<Visibility />}
+            leftIcon={<Visibility />}
             primary={false}
             onClick={() => setShowAdvanced(true)}
             label={<Trans>Show other lifecycle functions (advanced)</Trans>}
           />
         ) : (
           <FlatButton
-            icon={<VisibilityOff />}
+            leftIcon={<VisibilityOff />}
             primary={false}
             onClick={() => setShowAdvanced(false)}
             label={<Trans>Hide other lifecycle functions (advanced)</Trans>}

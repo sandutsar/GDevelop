@@ -3,7 +3,7 @@ import { Trans } from '@lingui/macro';
 import { t } from '@lingui/macro';
 
 import * as React from 'react';
-import Dialog from '../../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../../UI/Dialog';
 import FlatButton from '../../UI/FlatButton';
 import { Line, Column } from '../../UI/Grid';
 import ColorPicker from '../../UI/ColorField/ColorPicker';
@@ -140,12 +140,14 @@ const EventTextDialog = (props: Props) => {
 
   return (
     <Dialog
-      onApply={onApply}
-      title={<Trans>Edit the event text</Trans>}
-      onRequestClose={onClose}
-      cannotBeDismissed={true}
+      title={
+        eventType === 'BuiltinCommonInstructions::Comment' ? (
+          <Trans>Edit comment</Trans>
+        ) : (
+          <Trans>Edit group</Trans>
+        )
+      }
       open
-      noMargin
       actions={[
         <FlatButton
           key="close"
@@ -153,17 +155,18 @@ const EventTextDialog = (props: Props) => {
           primary={false}
           onClick={onClose}
         />,
-        <FlatButton
+        <DialogPrimaryButton
           key={'Apply'}
           label={<Trans>Apply</Trans>}
           primary
-          keyboardFocused
           onClick={onApply}
         />,
       ]}
+      onRequestClose={onClose}
+      onApply={onApply}
     >
       <Column noMargin>
-        <MiniToolbar>
+        <MiniToolbar noPadding>
           <MiniToolbarText firstChild>
             <Trans>Background color:</Trans>
           </MiniToolbarText>
@@ -193,11 +196,11 @@ const EventTextDialog = (props: Props) => {
           )}
         </MiniToolbar>
         <Line noMargin>
-          <Column expand>
+          <Column expand noMargin>
             <Line>
               <SemiControlledTextField
                 commitOnBlur
-                hintText={t`Enter the text to be displayed`}
+                translatableHintText={t`Enter the text to be displayed`}
                 fullWidth
                 multiline
                 rows={8}

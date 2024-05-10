@@ -1,12 +1,6 @@
 describe(`gdjs.PlatformerObjectRuntimeBehavior.findHighestFloorAndMoveOnTop`, function () {
   const makeTestRuntimeScene = () => {
-    const runtimeGame = new gdjs.RuntimeGame({
-      variables: [],
-      resources: {
-        resources: [],
-      },
-      properties: { windowWidth: 800, windowHeight: 600 },
-    });
+    const runtimeGame = gdjs.getPixiRuntimeGame();
     const runtimeScene = new gdjs.RuntimeScene(runtimeGame);
     runtimeScene.loadFromScene({
       layers: [{ name: '', visibility: true, effects: [] }],
@@ -38,6 +32,7 @@ describe(`gdjs.PlatformerObjectRuntimeBehavior.findHighestFloorAndMoveOnTop`, fu
           canGrabPlatforms: true,
           ignoreDefaultControls: true,
           slopeMaxAngle: 60,
+          useLegacyTrajectory: false,
         },
       ],
       effects: [],
@@ -95,7 +90,7 @@ describe(`gdjs.PlatformerObjectRuntimeBehavior.findHighestFloorAndMoveOnTop`, fu
     downwardDeltaY
   ) => {
     const result = characterBehavior._findHighestFloorAndMoveOnTop(
-      [platformBehavior.currentRBushAABB],
+      [platformBehavior],
       upwardDeltaY,
       downwardDeltaY
     );
@@ -110,7 +105,7 @@ describe(`gdjs.PlatformerObjectRuntimeBehavior.findHighestFloorAndMoveOnTop`, fu
   ) => {
     const oldY = characterBehavior.owner.getY();
     const result = characterBehavior._findHighestFloorAndMoveOnTop(
-      [platformBehavior.currentRBushAABB],
+      [platformBehavior],
       upwardDeltaY,
       downwardDeltaY
     );
@@ -127,7 +122,7 @@ describe(`gdjs.PlatformerObjectRuntimeBehavior.findHighestFloorAndMoveOnTop`, fu
   ) => {
     const oldY = characterBehavior.owner.getY();
     const result = characterBehavior._findHighestFloorAndMoveOnTop(
-      [platformBehavior.currentRBushAABB],
+      [platformBehavior],
       upwardDeltaY,
       downwardDeltaY
     );

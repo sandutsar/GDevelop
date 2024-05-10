@@ -1,14 +1,13 @@
 // @flow
 import { Trans } from '@lingui/macro';
 import * as React from 'react';
-import Dialog from '../UI/Dialog';
+import Dialog, { DialogPrimaryButton } from '../UI/Dialog';
 import HelpButton from '../UI/HelpButton';
 import FlatButton from '../UI/FlatButton';
-import RaisedButton from '../UI/RaisedButton';
 import { ColumnStackLayout } from '../UI/Layout';
 import Text from '../UI/Text';
-import { type HotReloaderLog } from '../Export/PreviewLauncher.flow';
-import { NewPreviewIcon } from './HotReloadPreviewButton';
+import { type HotReloaderLog } from '../ExportAndShare/PreviewLauncher.flow';
+import PreviewIcon from '../UI/CustomSvgIcons/Preview';
 
 type Props = {|
   logs: Array<HotReloaderLog>,
@@ -31,7 +30,6 @@ export default function HotReloadLogsDialog({
   return (
     <Dialog
       title={<Trans>Restarting the preview from scratch is required</Trans>}
-      onRequestClose={onClose}
       actions={[
         <FlatButton
           label={<Trans>Close</Trans>}
@@ -39,8 +37,8 @@ export default function HotReloadLogsDialog({
           primary={false}
           onClick={onClose}
         />,
-        <RaisedButton
-          icon={<NewPreviewIcon />}
+        <DialogPrimaryButton
+          icon={<PreviewIcon />}
           label={<Trans>Close and launch a new preview</Trans>}
           key="new-preview"
           primary
@@ -50,8 +48,8 @@ export default function HotReloadLogsDialog({
       secondaryActions={[
         <HelpButton key="help" helpPagePath={'/interface/preview'} />,
       ]}
+      onRequestClose={onClose}
       open
-      cannotBeDismissed
     >
       <ColumnStackLayout noMargin>
         <Text>

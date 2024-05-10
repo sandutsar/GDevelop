@@ -6,7 +6,7 @@
  * an example to start a new object, take a look at gdjs.DummyRuntimeObject
  * in the Extensions folder.
  */
- gdjs.TestRuntimeObject = class TestRuntimeObject extends gdjs.RuntimeObject {
+gdjs.TestRuntimeObject = class TestRuntimeObject extends gdjs.RuntimeObject {
   /** @type {float}  */
   _customWidth = 0;
   /** @type {float}  */
@@ -18,7 +18,7 @@
 
   /**
    * @param {gdjs.RuntimeScene} runtimeScene
-   * @param {ObjectData} objectData
+   * @param {ObjectData & any} objectData
    */
   constructor(runtimeScene, objectData) {
     // *ALWAYS* call the base gdjs.RuntimeObject constructor.
@@ -31,24 +31,40 @@
   setCustomWidthAndHeight(customWidth, customHeight) {
     this._customWidth = customWidth;
     this._customHeight = customHeight;
-    this.hitBoxesDirty = true;
+    this.invalidateHitboxes();
   }
 
   setCustomCenter(customCenterX, customCenterY) {
     this._customCenterX = customCenterX;
     this._customCenterY = customCenterY;
-    this.hitBoxesDirty = true;
+    this.invalidateHitboxes();
   }
 
   getRendererObject() {
-    return {};
+    return null;
   }
 
   getWidth() {
     return this._customWidth;
   }
 
+  setWidth(width) {
+    if (width !== this._customWidth) {
+      this._customWidth = width;
+      this.invalidateHitboxes();
+    }
+    return this._customWidth;
+  }
+
   getHeight() {
+    return this._customHeight;
+  }
+
+  setHeight(height) {
+    if (height !== this._customHeight) {
+      this._customHeight = height;
+      this.invalidateHitboxes();
+    }
     return this._customHeight;
   }
 

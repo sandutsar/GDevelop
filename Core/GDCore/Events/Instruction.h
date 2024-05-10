@@ -73,6 +73,22 @@ class GD_CORE_API Instruction {
   void SetInverted(bool inverted_) { inverted = inverted_; }
 
   /**
+   * \brief Return true if the async instruction should be awaited.
+   * This is not relevant if the instruction is not optionally asynchronous.
+   *
+   * \return true if the instruction is to be awaited
+   */
+  bool IsAwaited() const { return awaitAsync; }
+
+  /**
+   * \brief Set if the async instruction is to be awaited or not.
+   * This is not relevant if the instruction is not optionally asynchronous.
+   *
+   * \param inverted true if the instruction must be awaited
+   */
+  void SetAwaited(bool awaited) { awaitAsync = awaited; }
+
+  /**
    * \brief Return the number of parameters of the instruction.
    */
   std::size_t GetParametersCount() const { return parameters.size(); }
@@ -107,6 +123,11 @@ class GD_CORE_API Instruction {
    */
   void SetParameter(std::size_t nb, const gd::Expression& val);
 
+  /** Add a parameter at the end
+   * \param val The new value of the parameter
+   */
+  void AddParameter(const gd::Expression& val);
+
   /** \brief Get a reference to the std::vector containing the parameters.
    * \return A std::vector containing the parameters
    */
@@ -139,7 +160,9 @@ class GD_CORE_API Instruction {
    * Useful to get reference to the original instruction in memory during code
    * generation, to ensure stable unique identifiers.
    */
-  std::weak_ptr<Instruction> GetOriginalInstruction() { return originalInstruction; };
+  std::weak_ptr<Instruction> GetOriginalInstruction() {
+    return originalInstruction;
+  };
 
   friend std::shared_ptr<Instruction> CloneRememberingOriginalElement(
       std::shared_ptr<Instruction> instruction);
@@ -148,6 +171,9 @@ class GD_CORE_API Instruction {
   gd::String type;  ///< Instruction type
   bool inverted;  ///< True if the instruction if inverted. Only applicable for
                   ///< instruction used as conditions by events
+  bool awaitAsync =
+      false;  ///< Tells the code generator whether the optionally asynchronous
+              ///< instruction should be generated as asynchronous (awaited) or not.
   mutable std::vector<gd::Expression>
       parameters;                        ///< Vector containing the parameters
   gd::InstructionsList subInstructions;  ///< Sub instructions, if applicable.

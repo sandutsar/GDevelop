@@ -5,8 +5,12 @@
  */
 
 #include "GDCore/Events/Event.h"
+
+#include "GDCore/Events/Builtin/AsyncEvent.h"
 #include "GDCore/Events/CodeGeneration/EventsCodeGenerator.h"
 #include "GDCore/Events/EventsList.h"
+#include "GDCore/Events/EventVisitor.h"
+#include "GDCore/Extensions/Metadata/MetadataProvider.h"
 #include "GDCore/Extensions/Platform.h"
 #include "GDCore/Extensions/PlatformExtension.h"
 
@@ -65,10 +69,41 @@ gd::String BaseEvent::GenerateEventCode(
   return "";
 }
 
+void BaseEvent::PreprocessAsyncActions(const gd::Platform& platform) {
+  if (!CanHaveSubEvents()) return;
+  for (const auto& actionsList : GetAllActionsVectors())
+    for (std::size_t aId = 0; aId < actionsList->size(); ++aId) {
+      const auto& action = actionsList->at(aId);
+      const gd::InstructionMetadata& actionMetadata =
+          gd::MetadataProvider::GetActionMetadata(platform, action.GetType());
+      if (actionMetadata.IsAsync() &&
+          (!actionMetadata.IsOptionallyAsync() || action.IsAwaited())) {
+        gd::InstructionsList remainingActions;
+        remainingActions.InsertInstructions(
+            *actionsList, aId + 1, actionsList->size() - 1);
+        gd::AsyncEvent asyncEvent(action, remainingActions, GetSubEvents());
+
+        // Ensure that the local event no longer has any of the actions/subevent
+        // after the async function
+        actionsList->RemoveAfter(aId);
+        GetSubEvents().Clear();
+
+        GetSubEvents().InsertEvent(asyncEvent);
+
+        // We just moved all the rest, there's nothing left to do in this event.
+        return;
+      }
+    }
+};
+
 void BaseEvent::Preprocess(gd::EventsCodeGenerator& codeGenerator,
                            gd::EventsList& eventList,
                            std::size_t indexOfTheEventInThisList) {
-  if (IsDisabled() || !MustBePreprocessed()) return;
+  if (IsDisabled()) return;
+
+  PreprocessAsyncActions(codeGenerator.GetPlatform());
+
+  if (!MustBePreprocessed()) return;
 
   try {
     if (type.empty()) return;
@@ -104,6 +139,14 @@ void BaseEvent::Preprocess(gd::EventsCodeGenerator& codeGenerator,
     std::cout << "ERROR: Exception caught during preprocessing of event \""
               << type << "\"." << std::endl;
   }
+}
+
+bool BaseEvent::AcceptVisitor(gd::EventVisitor& eventVisitor) {
+  return eventVisitor.VisitEvent(*this);
+}
+
+void BaseEvent::AcceptVisitor(gd::ReadOnlyEventVisitor& eventVisitor) const {
+  eventVisitor.VisitEvent(*this);
 }
 
 BaseEventSPtr GD_CORE_API CloneRememberingOriginalEvent(BaseEventSPtr event) {

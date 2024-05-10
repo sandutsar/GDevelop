@@ -3,9 +3,9 @@ import * as React from 'react';
 import { Trans } from '@lingui/macro';
 import Dialog from '../UI/Dialog';
 import FlatButton from '../UI/FlatButton';
-import Typography from '@material-ui/core/Typography';
-import Paper from '@material-ui/core/Paper';
 import { getShortcutMetadataFromEvent, getShortcutDisplayName } from './index';
+import Text from '../UI/Text';
+import Paper from '../UI/Paper';
 
 const styles = {
   shortcutBox: {
@@ -25,6 +25,7 @@ const DetectShortcutDialog = (props: Props) => {
   const [isValid, setIsValid] = React.useState(false);
 
   const onApply = () => {
+    if (!isValid) return;
     shortcutString && props.onSet(shortcutString);
     props.onClose();
   };
@@ -47,10 +48,8 @@ const DetectShortcutDialog = (props: Props) => {
 
   return (
     <Dialog
-      open
       title={<Trans>Set shortcut</Trans>}
-      onRequestClose={props.onClose}
-      cannotBeDismissed={false}
+      open
       maxWidth="xs"
       actions={[
         <FlatButton
@@ -76,16 +75,18 @@ const DetectShortcutDialog = (props: Props) => {
           }}
         />,
       ]}
+      onRequestClose={props.onClose}
+      onApply={onApply}
     >
-      <Typography>{props.commandText}</Typography>
-      <Paper variant="outlined" style={styles.shortcutBox}>
-        <Typography>
+      <Text>{props.commandText}</Text>
+      <Paper variant="outlined" style={styles.shortcutBox} background="light">
+        <Text>
           {shortcutString ? (
             getShortcutDisplayName(shortcutString)
           ) : (
             <Trans>Press a shortcut combination...</Trans>
           )}
-        </Typography>
+        </Text>
       </Paper>
     </Dialog>
   );

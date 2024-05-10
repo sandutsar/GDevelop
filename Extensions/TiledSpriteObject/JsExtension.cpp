@@ -78,16 +78,26 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
     GetAllActionsForObject(
+        "TiledSpriteObject::TiledSprite")["TiledSpriteObject::SetSize"]
+        .SetFunctionName("setSize")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+
+    // Deprecated: now available for all objects.
+    GetAllActionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::Angle"]
         .SetFunctionName("setAngle")
         .SetGetter("getAngle")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+
+    // Deprecated: now available for all objects.
     GetAllConditionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::Angle"]
         .SetFunctionName("getAngle")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+
     GetAllActionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::XOffset"]
         .SetFunctionName("setXOffset")
@@ -99,6 +109,11 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
         .SetFunctionName("getXOffset")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+    GetAllExpressionsForObject(
+        "TiledSpriteObject::TiledSprite")["XOffset"]
+        .SetFunctionName("getXOffset")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
     GetAllActionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::YOffset"]
         .SetFunctionName("setYOffset")
@@ -107,6 +122,11 @@ class TiledSpriteObjectJsExtension : public gd::PlatformExtension {
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
     GetAllConditionsForObject(
         "TiledSpriteObject::TiledSprite")["TiledSpriteObject::YOffset"]
+        .SetFunctionName("getYOffset")
+        .SetIncludeFile(
+            "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");
+    GetAllExpressionsForObject(
+        "TiledSpriteObject::TiledSprite")["YOffset"]
         .SetFunctionName("getYOffset")
         .SetIncludeFile(
             "Extensions/TiledSpriteObject/tiledspriteruntimeobject.js");

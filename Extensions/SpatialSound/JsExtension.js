@@ -1,4 +1,5 @@
-// @flow
+//@ts-check
+/// <reference path="../JsExtensionTypes.d.ts" />
 /**
  * This is a declaration of an extension for GDevelop 5.
  *
@@ -12,28 +13,24 @@
  * More information on https://github.com/4ian/GDevelop/blob/master/newIDE/README-extensions.md
  */
 
-/*::
-// Import types to allow Flow to do static type checking on this file.
-// Extensions declaration are typed using Flow (like the editor), but the files
-// for the game engine are checked with TypeScript annotations.
-import { type ObjectsRenderingService, type ObjectsEditorService } from '../JsExtensionTypes.flow.js'
-*/
-
+/** @type {ExtensionModule} */
 module.exports = {
-  createExtension: function(
-    _ /*: (string) => string */,
-    gd /*: libGDevelop */
-  ) {
+  createExtension: function (_, gd) {
     const extension = new gd.PlatformExtension();
-    extension.setExtensionInformation(
-      'SpatialSound',
-      _('Spatial sound'),
-      _(
-        'Allow positioning sounds in a 3D space. The stereo system of the device is used to simulate the position of the sound and to give the impression that the sound is located somewhere around the player.'
-      ),
-      'Arthur Pacaud (arthuro555)',
-      'MIT'
-    );
+    extension
+      .setExtensionInformation(
+        'SpatialSound',
+        _('Spatial sound'),
+        _(
+          'Allow positioning sounds in a 3D space. The stereo system of the device is used to simulate the position of the sound and to give the impression that the sound is located somewhere around the player.'
+        ),
+        'Arthur Pacaud (arthuro555)',
+        'MIT'
+      )
+      .setCategory('Audio');
+    extension
+      .addInstructionOrExpressionGroupMetadata(_('Spatial sound'))
+      .setIcon('res/actions/son24.png');
 
     extension
       .addAction(
@@ -45,7 +42,7 @@ module.exports = {
         _(
           'Set position of sound on channel _PARAM1_ to position _PARAM2_, _PARAM3_, _PARAM4_'
         ),
-        _('Audio/Spatial Sound'),
+        '',
         'res/actions/son24.png',
         'res/actions/son.png'
       )
@@ -62,10 +59,10 @@ module.exports = {
     extension
       .addAction(
         'SetListenerPosition',
-        _('Set position of the listener'),
-        _('Sets the spatial position of the listener/player.'),
-        _('Set the listener position to _PARAM0_, _PARAM1_, _PARAM2_'),
-        _('Audio/Spatial Sound'),
+        _('Listener position'),
+        _('Change the spatial position of the listener/player.'),
+        _('Change the listener position to _PARAM0_, _PARAM1_, _PARAM2_'),
+        '',
         'res/actions/son24.png',
         'res/actions/son.png'
       )
@@ -78,10 +75,7 @@ module.exports = {
 
     return extension;
   },
-  runExtensionSanityTests: function(
-    gd /*: libGDevelop */,
-    extension /*: gdPlatformExtension*/
-  ) {
+  runExtensionSanityTests: function (gd, extension) {
     return [];
   },
 };

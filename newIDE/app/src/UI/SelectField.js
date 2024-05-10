@@ -5,7 +5,24 @@ import { I18n } from '@lingui/react';
 import TextField from '@material-ui/core/TextField';
 import { type MessageDescriptor } from '../Utils/i18n/MessageDescriptor.flow';
 import { computeTextFieldStyleProps } from './TextField';
+import { type FieldFocusFunction } from '../EventsSheet/ParameterFields/ParameterFieldCommons';
 import { MarkdownText } from './MarkdownText';
+import { makeStyles } from '@material-ui/core';
+
+const INVALID_VALUE = '';
+const stopPropagation = event => event.stopPropagation();
+
+const useSelectStyles = textAlign =>
+  makeStyles({
+    root: {
+      textAlign: textAlign || 'left',
+      cursor: 'default',
+    },
+  })();
+
+export type SelectFieldInterface = {|
+  focus: FieldFocusFunction,
+|};
 
 type ValueProps = {|
   value: number | string,
@@ -24,36 +41,44 @@ type Props = {|
   fullWidth?: boolean,
   children: React.Node,
   disabled?: boolean,
+  stopPropagationOnClick?: boolean,
 
+  id?: ?string,
   style?: {
     flex?: 1,
     width?: 'auto',
   },
+  inputStyle?: {| fontSize?: 14, color?: string |},
   margin?: 'none' | 'dense',
+  disableUnderline?: true,
+  textAlign?: 'center',
 
   floatingLabelText?: React.Node,
   helperMarkdownText?: ?string,
 
   // If a hint text is specified, will be shown as an option for the empty
   // value (""), disabled.
-  hintText?: MessageDescriptor,
+  translatableHintText?: MessageDescriptor,
+  errorText?: React.Node,
 |};
-
-const INVALID_VALUE = '';
 
 /**
  * A select field based on Material-UI select field.
  * To be used with `SelectOption`.
  */
-export default class SelectField extends React.Component<Props, {||}> {
-  _input = React.createRef<HTMLInputElement>();
+const SelectField = React.forwardRef<Props, SelectFieldInterface>(
+  (props, ref) => {
+    const inputRef = React.useRef<?HTMLInputElement>(null);
 
-  focus() {
-    if (this._input.current) this._input.current.focus();
-  }
+    const focus: FieldFocusFunction = options => {
+      if (inputRef.current) inputRef.current.focus();
+    };
 
-  render() {
-    const { props } = this;
+    React.useImperativeHandle(ref, () => ({
+      focus,
+    }));
+    const selectStyles = useSelectStyles(props.textAlign);
+
     const onChange = props.onChange || undefined;
 
     // Dig into children props to see if the current value is valid or not.
@@ -74,7 +99,9 @@ export default class SelectField extends React.Component<Props, {||}> {
     }
     const displayedValue = hasValidValue ? props.value : INVALID_VALUE;
 
-    const helperText = props.helperMarkdownText ? (
+    const helperText = props.errorText ? (
+      props.errorText
+    ) : props.helperMarkdownText ? (
       <MarkdownText source={props.helperMarkdownText} />
     ) : null;
 
@@ -82,13 +109,17 @@ export default class SelectField extends React.Component<Props, {||}> {
       <I18n>
         {({ i18n }) => (
           <TextField
+            id={props.id}
             select
+            color="secondary"
             {...computeTextFieldStyleProps(props)}
             disabled={props.disabled}
             fullWidth={props.fullWidth}
             label={props.floatingLabelText}
             helperText={helperText}
+            error={!!props.errorText}
             value={displayedValue}
+            onClick={props.stopPropagationOnClick ? stopPropagation : undefined}
             onChange={
               onChange
                 ? event => {
@@ -96,19 +127,24 @@ export default class SelectField extends React.Component<Props, {||}> {
                   }
                 : undefined
             }
+            InputProps={{
+              style: props.inputStyle,
+              disableUnderline: !!props.disableUnderline,
+            }}
             InputLabelProps={{
               shrink: true,
             }}
             SelectProps={{
               native: true,
+              classes: selectStyles,
             }}
             style={props.style}
-            inputRef={this._input}
+            inputRef={inputRef}
           >
             {!hasValidValue ? (
               <option value={INVALID_VALUE} disabled>
-                {props.hintText
-                  ? i18n._(props.hintText)
+                {props.translatableHintText
+                  ? i18n._(props.translatableHintText)
                   : i18n._(t`Choose an option`)}
               </option>
             ) : null}
@@ -118,4 +154,6 @@ export default class SelectField extends React.Component<Props, {||}> {
       </I18n>
     );
   }
-}
+);
+
+export default SelectField;

@@ -14,6 +14,9 @@ namespace gdjs {
     static MOUSE_LEFT_BUTTON: integer = 0;
     static MOUSE_RIGHT_BUTTON: integer = 1;
     static MOUSE_MIDDLE_BUTTON: integer = 2;
+    static MOUSE_BACK_BUTTON: integer = 3;
+    static MOUSE_FORWARD_BUTTON: integer = 4;
+    static MOUSE_TOUCH_ID: integer = 1;
 
     /**
      * Holds the raw keyCodes of the keys which only have left/right
@@ -26,10 +29,38 @@ namespace gdjs {
     _lastPressedKey: float = 0;
     _pressedMouseButtons: Array<boolean>;
     _releasedMouseButtons: Array<boolean>;
+    /**
+     * The cursor X position (moved by mouse and touch events).
+     */
+    _cursorX: float = 0;
+    /**
+     * The cursor Y position (moved by mouse and touch events).
+     */
+    _cursorY: float = 0;
+    /**
+     * The mouse X position (only moved by mouse events).
+     */
     _mouseX: float = 0;
+    /**
+     * The mouse Y position (only moved by mouse events).
+     */
     _mouseY: float = 0;
+    _isMouseInsideCanvas: boolean = true;
     _mouseWheelDelta: float = 0;
-    _touches: Hashtable<Touch>;
+    // TODO Remove _touches when there is no longer SpritePanelButton 1.2.0
+    // extension in the wild.
+    _touches = {
+      firstKey: (): string | number | null => {
+        for (const key in this._mouseOrTouches.items) {
+          // Exclude mouse key.
+          if (key !== '1') {
+            return key;
+          }
+        }
+        return null;
+      },
+    };
+    _mouseOrTouches: Hashtable<Touch>;
     //Identifiers of the touches that started during/before the frame.
     _startedTouches: Array<integer> = [];
 
@@ -37,12 +68,21 @@ namespace gdjs {
     _endedTouches: Array<integer> = [];
     _touchSimulateMouse: boolean = true;
 
+    /**
+     * @deprecated
+     */
+    _lastStartedTouchIndex = 0;
+    /**
+     * @deprecated
+     */
+    _lastEndedTouchIndex = 0;
+
     constructor() {
       this._pressedKeys = new Hashtable();
       this._releasedKeys = new Hashtable();
       this._pressedMouseButtons = new Array(5);
       this._releasedMouseButtons = new Array(5);
-      this._touches = new Hashtable();
+      this._mouseOrTouches = new Hashtable();
     }
 
     /**
@@ -171,8 +211,41 @@ namespace gdjs {
      * @param y The mouse new Y position
      */
     onMouseMove(x: float, y: float): void {
+      this._setCursorPosition(x, y);
       this._mouseX = x;
       this._mouseY = y;
+      if (this.isMouseButtonPressed(InputManager.MOUSE_LEFT_BUTTON)) {
+        this._moveTouch(
+          InputManager.MOUSE_TOUCH_ID,
+          this.getCursorX(),
+          this.getCursorY()
+        );
+      }
+    }
+
+    _setCursorPosition(x: float, y: float): void {
+      this._cursorX = x;
+      this._cursorY = y;
+    }
+
+    /**
+     * Get the cursor X position.
+     * The cursor is moved by mouse and touch events.
+     *
+     * @return the cursor X position, relative to the game view.
+     */
+    getCursorX(): float {
+      return this._cursorX;
+    }
+
+    /**
+     * Get the cursor Y position.
+     * The cursor is moved by mouse and touch events.
+     *
+     * @return the cursor Y position, relative to the game view.
+     */
+    getCursorY(): float {
+      return this._cursorY;
     }
 
     /**
@@ -194,11 +267,43 @@ namespace gdjs {
     }
 
     /**
+     * Should be called when the mouse leave the canvas.
+     */
+    onMouseLeave(): void {
+      this._isMouseInsideCanvas = false;
+    }
+
+    /**
+     * Should be called when the mouse enter the canvas.
+     */
+    onMouseEnter(): void {
+      this._isMouseInsideCanvas = true;
+    }
+
+    /**
+     * @return true when the mouse is inside the canvas.
+     */
+    isMouseInsideCanvas(): boolean {
+      return this._isMouseInsideCanvas;
+    }
+
+    /**
      * Should be called whenever a mouse button is pressed.
      * @param buttonCode The mouse button code associated to the event.
      * See InputManager.MOUSE_LEFT_BUTTON, InputManager.MOUSE_RIGHT_BUTTON, InputManager.MOUSE_MIDDLE_BUTTON
      */
     onMouseButtonPressed(buttonCode: number): void {
+      this._setMouseButtonPressed(buttonCode);
+      if (buttonCode === InputManager.MOUSE_LEFT_BUTTON) {
+        this._addTouch(
+          InputManager.MOUSE_TOUCH_ID,
+          this.getCursorX(),
+          this.getCursorY()
+        );
+      }
+    }
+
+    _setMouseButtonPressed(buttonCode: number): void {
       this._pressedMouseButtons[buttonCode] = true;
       this._releasedMouseButtons[buttonCode] = false;
     }
@@ -208,6 +313,13 @@ namespace gdjs {
      * @param buttonCode The mouse button code associated to the event. (see onMouseButtonPressed)
      */
     onMouseButtonReleased(buttonCode: number): void {
+      this._setMouseButtonReleased(buttonCode);
+      if (buttonCode === InputManager.MOUSE_LEFT_BUTTON) {
+        this._removeTouch(InputManager.MOUSE_TOUCH_ID);
+      }
+    }
+
+    _setMouseButtonReleased(buttonCode: number): void {
       this._pressedMouseButtons[buttonCode] = false;
       this._releasedMouseButtons[buttonCode] = true;
     }
@@ -254,11 +366,11 @@ namespace gdjs {
      *
      * @return the touch X position, relative to the game view.
      */
-    getTouchX(identifier: integer): float {
-      if (!this._touches.containsKey(identifier)) {
+    getTouchX(publicIdentifier: integer): float {
+      if (!this._mouseOrTouches.containsKey(publicIdentifier)) {
         return 0;
       }
-      return this._touches.get(identifier).x;
+      return this._mouseOrTouches.get(publicIdentifier).x;
     }
 
     /**
@@ -266,11 +378,24 @@ namespace gdjs {
      *
      * @return the touch Y position, relative to the game view.
      */
-    getTouchY(identifier: integer): float {
-      if (!this._touches.containsKey(identifier)) {
+    getTouchY(publicIdentifier: integer): float {
+      if (!this._mouseOrTouches.containsKey(publicIdentifier)) {
         return 0;
       }
-      return this._touches.get(identifier).y;
+      return this._mouseOrTouches.get(publicIdentifier).y;
+    }
+
+    /**
+     * @param publicIdentifier the touch identifier
+     * @returns true if the touch has just ended.
+     */
+    hasTouchEnded(publicIdentifier: integer): boolean {
+      return (
+        this._endedTouches.includes(publicIdentifier) &&
+        // A touch that end then start in one frame is ignored
+        // because it's probably noise.
+        this._mouseOrTouches.get(publicIdentifier).justEnded
+      );
     }
 
     /**
@@ -278,56 +403,104 @@ namespace gdjs {
      */
     getAllTouchIdentifiers(): Array<integer> {
       InputManager._allTouchIds.length = 0;
-      for (const id in this._touches.items) {
-        if (this._touches.items.hasOwnProperty(id)) {
+      for (const id in this._mouseOrTouches.items) {
+        if (this._mouseOrTouches.items.hasOwnProperty(id)) {
           InputManager._allTouchIds.push(parseInt(id, 10));
         }
       }
       return InputManager._allTouchIds;
     }
 
-    onTouchStart(identifier: integer, x: float, y: float): void {
-      this._startedTouches.push(identifier);
-      this._touches.put(identifier, { x: x, y: y, justEnded: false });
+    onTouchStart(rawIdentifier: integer, x: float, y: float): void {
+      this._addTouch(this.getPublicTouchIdentifier(rawIdentifier), x, y);
       if (this._touchSimulateMouse) {
-        this.onMouseMove(x, y);
-        this.onMouseButtonPressed(InputManager.MOUSE_LEFT_BUTTON);
+        this._setCursorPosition(x, y);
+        this._setMouseButtonPressed(InputManager.MOUSE_LEFT_BUTTON);
       }
     }
 
-    onTouchMove(identifier: integer, x: float, y: float): void {
-      const touch = this._touches.get(identifier);
+    _addTouch(publicIdentifier: integer, x: float, y: float): void {
+      // A touch that end then start in one frame is ignored
+      // because it's probably noise.
+      if (!this._endedTouches.includes(publicIdentifier)) {
+        this._startedTouches.push(publicIdentifier);
+        this._mouseOrTouches.put(publicIdentifier, {
+          x: x,
+          y: y,
+          justEnded: false,
+        });
+      }
+    }
+
+    onTouchMove(rawIdentifier: integer, x: float, y: float): void {
+      this._moveTouch(this.getPublicTouchIdentifier(rawIdentifier), x, y);
+      if (this._touchSimulateMouse) {
+        this._setCursorPosition(x, y);
+      }
+    }
+
+    _moveTouch(publicIdentifier: integer, x: float, y: float): void {
+      const touch = this._mouseOrTouches.get(publicIdentifier);
       if (!touch) {
         return;
       }
       touch.x = x;
       touch.y = y;
+    }
+
+    onTouchEnd(rawIdentifier: number): void {
+      this._removeTouch(this.getPublicTouchIdentifier(rawIdentifier));
       if (this._touchSimulateMouse) {
-        this.onMouseMove(x, y);
+        this._setMouseButtonReleased(InputManager.MOUSE_LEFT_BUTTON);
       }
     }
 
-    onTouchEnd(identifier: number): void {
-      this._endedTouches.push(identifier);
-      if (this._touches.containsKey(identifier)) {
+    onTouchCancel(rawIdentifier: number): void {
+      // Don't do anything specific for canceled touches to avoid to make
+      // touches handling more complex for users.
+      this.onTouchEnd(rawIdentifier);
+    }
+
+    _removeTouch(publicIdentifier: number): void {
+      this._endedTouches.push(publicIdentifier);
+      if (this._mouseOrTouches.containsKey(publicIdentifier)) {
         //Postpone deletion at the end of the frame
-        this._touches.get(identifier).justEnded = true;
+        this._mouseOrTouches.get(publicIdentifier).justEnded = true;
       }
-      if (this._touchSimulateMouse) {
-        this.onMouseButtonReleased(InputManager.MOUSE_LEFT_BUTTON);
-      }
+    }
+
+    /**
+     * Add 2 to the identifier to avoid identifiers taking the GDevelop default
+     * variable value which is 0 and reserve 1 for the mouse.
+     * @param rawIdentifier The identifier given by the browser.
+     * @returns The identifier used in events.
+     */
+    private getPublicTouchIdentifier(rawIdentifier: integer): integer {
+      return rawIdentifier + 2;
     }
 
     getStartedTouchIdentifiers(): integer[] {
       return this._startedTouches;
     }
 
+    /**
+     * @deprecated
+     */
     popStartedTouch(): integer | undefined {
-      return this._startedTouches.shift();
+      const publicIdentifier = this._startedTouches[
+        this._lastStartedTouchIndex
+      ];
+      this._lastStartedTouchIndex++;
+      return publicIdentifier;
     }
 
+    /**
+     * @deprecated
+     */
     popEndedTouch(): integer | undefined {
-      return this._endedTouches.shift();
+      const publicIdentifier = this._endedTouches[this._lastEndedTouchIndex];
+      this._lastEndedTouchIndex++;
+      return publicIdentifier;
     }
 
     /**
@@ -345,6 +518,13 @@ namespace gdjs {
     }
 
     /**
+     * @returns true if the touch events are used to simulate mouse events.
+     */
+    isSimulatingMouseWithTouch(): boolean {
+      return this._touchSimulateMouse;
+    }
+
+    /**
      * Notify the input manager that the frame ended, so anything that last
      * only for one frame (started/ended touches) should be reset.
      *
@@ -353,11 +533,11 @@ namespace gdjs {
      */
     onFrameEnded(): void {
       //Only clear the ended touches at the end of the frame.
-      for (const id in this._touches.items) {
-        if (this._touches.items.hasOwnProperty(id)) {
-          const touch = this._touches.items[id];
+      for (const id in this._mouseOrTouches.items) {
+        if (this._mouseOrTouches.items.hasOwnProperty(id)) {
+          const touch = this._mouseOrTouches.items[id];
           if (touch.justEnded) {
-            this._touches.remove(id);
+            this._mouseOrTouches.remove(id);
           }
         }
       }
@@ -366,6 +546,8 @@ namespace gdjs {
       this._releasedKeys.clear();
       this._releasedMouseButtons.length = 0;
       this._mouseWheelDelta = 0;
+      this._lastStartedTouchIndex = 0;
+      this._lastEndedTouchIndex = 0;
     }
 
     /**

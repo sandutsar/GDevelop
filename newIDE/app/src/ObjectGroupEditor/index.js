@@ -1,12 +1,21 @@
 // @flow
-import { t } from '@lingui/macro';
-
 import * as React from 'react';
+import { t, Trans } from '@lingui/macro';
+
 import { List, ListItem } from '../UI/List';
 import ObjectSelector from '../ObjectsList/ObjectSelector';
-import EmptyMessage from '../UI/EmptyMessage';
 import { Column } from '../UI/Grid';
+import ListIcon from '../UI/ListIcon';
+import ObjectsRenderingService from '../ObjectsRendering/ObjectsRenderingService';
+import getObjectByName from '../Utils/GetObjectByName';
+import Paper from '../UI/Paper';
+import { ColumnStackLayout } from '../UI/Layout';
+import AlertMessage from '../UI/AlertMessage';
 const gd: libGDevelop = global.gd;
+
+const styles = {
+  objectSelector: { position: 'sticky', bottom: 0 },
+};
 
 type Props = {|
   project: ?gdProject,
@@ -14,108 +23,132 @@ type Props = {|
   globalObjectsContainer: gdObjectsContainer,
   objectsContainer: gdObjectsContainer,
   onSizeUpdated?: () => void,
+  onObjectGroupUpdated?: () => void,
 |};
 
-type State = {|
-  newObjectName: string,
-|};
+const ObjectGroupEditor = ({
+  project,
+  group,
+  globalObjectsContainer,
+  objectsContainer,
+  onSizeUpdated,
+  onObjectGroupUpdated,
+}: Props) => {
+  const [objectName, setObjectName] = React.useState<string>('');
+  const objectsInGroup = group.getAllObjectsNames().toJSArray();
 
-export default class ObjectGroupEditor extends React.Component<Props, State> {
-  state = {
-    newObjectName: '',
-  };
-
-  removeObject = (objectName: string) => {
-    const { group, onSizeUpdated } = this.props;
-
+  const removeObject = (objectName: string) => {
     group.removeObject(objectName);
 
-    this.forceUpdate();
     if (onSizeUpdated) onSizeUpdated();
+    if (onObjectGroupUpdated) onObjectGroupUpdated();
   };
 
-  addObject = (objectName: string) => {
-    const { group, onSizeUpdated } = this.props;
-
+  const addObject = (objectName: string) => {
     group.addObject(objectName);
-    this.setState({
-      newObjectName: '',
-    });
+    setObjectName('');
     if (onSizeUpdated) onSizeUpdated();
+    if (onObjectGroupUpdated) onObjectGroupUpdated();
   };
 
-  _renderExplanation() {
-    const { group, globalObjectsContainer, objectsContainer } = this.props;
-
+  const renderExplanation = () => {
     let type = undefined;
-    group
-      .getAllObjectsNames()
-      .toJSArray()
-      .forEach(objectName => {
-        const objectType = gd.getTypeOfObject(
-          globalObjectsContainer,
-          objectsContainer,
-          objectName,
-          false
-        );
-        if (type === undefined || objectType === type) type = objectType;
-        else type = '';
-      });
-
-    let message = '';
-    if (type === undefined) {
-      message = 'This group is empty';
-    } else if (type === '') {
-      message =
-        "This group contains objects of different kinds. You'll only be able to use actions and conditions common to all objects with this group.";
-    } else {
-      message = `This group contains objects of the same kind (${type}). You can use actions and conditions related to this kind of objects in events with this group.`;
+    if (objectsInGroup.length === 0) {
+      return null;
     }
+    objectsInGroup.forEach(objectName => {
+      const objectType = gd.getTypeOfObject(
+        globalObjectsContainer,
+        objectsContainer,
+        objectName,
+        false
+      );
+      if (type === undefined || objectType === type) type = objectType;
+      else type = '';
+    });
 
-    return <EmptyMessage>{message}</EmptyMessage>;
-  }
+    const message =
+      type === '' ? (
+        <>
+          <Trans>
+            This group contains objects of different kinds. You'll only be able
+            to use actions and conditions common to all objects with this group.
+          </Trans>{' '}
+          <Trans>
+            Variables declared in all objects of the group will be visible in
+            event expressions.
+          </Trans>
+        </>
+      ) : (
+        <>
+          <Trans>
+            This group contains objects of the same kind ({type}). You can use
+            actions and conditions related to this kind of objects in events
+            with this group.
+          </Trans>{' '}
+          <Trans>
+            Variables declared in all objects of the group will be visible in
+            event expressions.
+          </Trans>
+        </>
+      );
 
-  render() {
-    const {
-      project,
-      group,
-      globalObjectsContainer,
-      objectsContainer,
-    } = this.props;
+    return <AlertMessage kind="info">{message}</AlertMessage>;
+  };
 
-    return (
-      <div>
-        {this._renderExplanation()}
-        <List>
-          {group
-            .getAllObjectsNames()
-            .toJSArray()
-            .map(objectName => {
-              return (
-                <ListItem
-                  key={objectName}
-                  primaryText={objectName}
-                  displayRemoveButton
-                  onRemove={() => this.removeObject(objectName)}
+  return (
+    <ColumnStackLayout noMargin>
+      {renderExplanation()}
+      <List>
+        {group
+          .getAllObjectsNames()
+          .toJSArray()
+          .map(objectName => {
+            let object = getObjectByName(
+              globalObjectsContainer,
+              objectsContainer,
+              objectName
+            );
+            const icon =
+              project && object ? (
+                <ListIcon
+                  iconSize={24}
+                  src={ObjectsRenderingService.getThumbnail(
+                    project,
+                    object.getConfiguration()
+                  )}
                 />
-              );
-            })}
-        </List>
-        <Column>
+              ) : null;
+            return (
+              <ListItem
+                key={objectName}
+                primaryText={objectName}
+                displayRemoveButton
+                onRemove={() => removeObject(objectName)}
+                leftIcon={icon}
+              />
+            );
+          })}
+      </List>
+      <Paper style={styles.objectSelector} background="medium">
+        <Column noMargin>
           <ObjectSelector
             project={project}
             globalObjectsContainer={globalObjectsContainer}
             objectsContainer={objectsContainer}
-            value={this.state.newObjectName}
-            onChange={name => this.setState({ newObjectName: name })}
-            onChoose={this.addObject}
+            value={objectName}
+            excludedObjectOrGroupNames={objectsInGroup}
+            onChange={setObjectName}
+            onChoose={addObject}
             openOnFocus
             noGroups
             hintText={t`Choose an object to add to the group`}
             fullWidth
           />
         </Column>
-      </div>
-    );
-  }
-}
+      </Paper>
+    </ColumnStackLayout>
+  );
+};
+
+export default ObjectGroupEditor;

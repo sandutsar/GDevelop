@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { type I18n as I18nType } from '@lingui/core';
 import ReactDOM from 'react-dom';
-import ContextMenu from './ContextMenu';
+import ContextMenu, { type ContextMenuInterface } from './ContextMenu';
 import { type MenuItemTemplate } from './Menu.flow';
 
 type Props = {|
@@ -19,10 +19,11 @@ type State = {||};
  */
 
 export default class ElementWithMenu extends React.Component<Props, State> {
-  _contextMenu: ?ContextMenu;
+  _contextMenu: ?ContextMenuInterface;
   _wrappedElement: ?any;
 
-  open = () => {
+  open = (event?: Event) => {
+    if (event && event.stopPropagation) event.stopPropagation();
     const { _contextMenu } = this;
     if (!_contextMenu) return;
 

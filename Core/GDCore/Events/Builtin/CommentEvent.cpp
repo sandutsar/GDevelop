@@ -21,6 +21,13 @@ vector<gd::String> CommentEvent::GetAllSearchableStrings() const {
   return allSearchableStrings;
 }
 
+bool CommentEvent::ReplaceAllSearchableStrings(
+    std::vector<gd::String> newSearchableString) {
+  if (newSearchableString[0] == com1) return false;
+  SetComment(newSearchableString[0]);
+  return true;
+}
+
 void CommentEvent::SerializeTo(SerializerElement &element) const {
   element.AddChild("color")
       .SetAttribute("r", r)
@@ -31,7 +38,7 @@ void CommentEvent::SerializeTo(SerializerElement &element) const {
       .SetAttribute("textB", textB);
 
   element.AddChild("comment").SetValue(com1);
-  element.AddChild("comment2").SetValue(com2);
+  if (!com2.empty()) element.AddChild("comment2").SetValue(com2);
 }
 
 void CommentEvent::UnserializeFrom(gd::Project &project,
@@ -46,7 +53,9 @@ void CommentEvent::UnserializeFrom(gd::Project &project,
   textB = colorElement.GetIntAttribute("textB");
 
   com1 = element.GetChild("comment", 0, "Com1").GetValue().GetString();
-  com2 = element.GetChild("comment2", 0, "Com2").GetValue().GetString();
+  if (element.HasChild("comment2")) {
+    com2 = element.GetChild("comment2", 0, "Com2").GetValue().GetString();
+  }
 }
 
 }  // namespace gd

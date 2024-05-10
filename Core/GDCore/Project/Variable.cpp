@@ -10,6 +10,7 @@
 
 #include "GDCore/Serialization/SerializerElement.h"
 #include "GDCore/String.h"
+#include "GDCore/Tools/UUID/UUID.h"
 
 using namespace std;
 
@@ -92,7 +93,7 @@ double Variable::GetValue() const {
     return value;
   } else if (type == Type::String) {
     double retVal = str.empty() ? 0.0 : str.To<double>();
-    if(std::isnan(retVal)) retVal = 0.0;
+    if (std::isnan(retVal)) retVal = 0.0;
     return retVal;
   } else if (type == Type::Boolean) {
     return boolVal ? 1.0 : 0.0;
@@ -188,6 +189,15 @@ const Variable& Variable::GetAtIndex(const size_t index) const {
   return *childrenArray.at(index);
 };
 
+void Variable::MoveChildInArray(const size_t oldIndex, const size_t newIndex) {
+  if (oldIndex >= childrenArray.size() || newIndex >= childrenArray.size())
+    return;
+
+  std::shared_ptr<gd::Variable> object = std::move(childrenArray[oldIndex]);
+  childrenArray.erase(childrenArray.begin() + oldIndex);
+  childrenArray.insert(childrenArray.begin() + newIndex, std::move(object));
+}
+
 Variable& Variable::PushNew() { return GetAtIndex(GetChildrenCount()); };
 
 void Variable::RemoveAtIndex(const size_t index) {
@@ -195,8 +205,32 @@ void Variable::RemoveAtIndex(const size_t index) {
   childrenArray.erase(childrenArray.begin() + index);
 };
 
+bool Variable::InsertAtIndex(const gd::Variable& variable, const size_t index) {
+  if (type != Type::Array) return false;
+  auto newVariable = std::make_shared<gd::Variable>(variable);
+  if (index < childrenArray.size()) {
+    childrenArray.insert(childrenArray.begin() + index, newVariable);
+  } else {
+    childrenArray.push_back(newVariable);
+  }
+  return true;
+};
+
+bool Variable::InsertChild(const gd::String& name,
+                           const gd::Variable& variable) {
+  if (type != Type::Structure || HasChild(name)) {
+    return false;
+  }
+  children[name] = std::make_shared<gd::Variable>(variable);
+  return true;
+};
+
 void Variable::SerializeTo(SerializerElement& element) const {
   element.SetStringAttribute("type", TypeAsString(GetType()));
+  if (IsFolded()) element.SetBoolAttribute("folded", true);
+
+  if (!persistentUuid.empty())
+    element.SetStringAttribute("persistentUuid", persistentUuid);
 
   if (type == Type::String) {
     element.SetStringAttribute("value", GetString());
@@ -224,6 +258,8 @@ void Variable::SerializeTo(SerializerElement& element) const {
 void Variable::UnserializeFrom(const SerializerElement& element) {
   type = StringAsType(element.GetStringAttribute("type", "string"));
 
+  persistentUuid = element.GetStringAttribute("persistentUuid");
+
   // Compatibility with GD <= 5.0.0-beta102
   // Before, everything was stored as strings.
   // We can unserialize primitives as string as they can be converted from/to
@@ -234,6 +270,7 @@ void Variable::UnserializeFrom(const SerializerElement& element) {
   if (element.HasChild("children", "Children") && IsPrimitive(type))
     type = Type::Structure;
   // end of compatibility code
+  SetFolded(element.GetBoolAttribute("folded", false));
 
   if (IsPrimitive(type)) {
     if (type == Type::String) {
@@ -259,7 +296,12 @@ void Variable::UnserializeFrom(const SerializerElement& element) {
         PushNew().UnserializeFrom(childElement);
     }
   }
-}  // namespace gd
+}
+
+Variable& Variable::ResetPersistentUuid() {
+  persistentUuid = UUID::MakeUuid4();
+  return *this;
+}
 
 std::vector<gd::String> Variable::GetAllChildrenNames() const {
   std::vector<gd::String> names;
@@ -305,8 +347,10 @@ void Variable::RemoveRecursively(const gd::Variable& variableToRemove) {
 Variable::Variable(const Variable& other)
     : value(other.value),
       str(other.str),
+      folded(other.folded),
       boolVal(other.boolVal),
-      type(other.type) {
+      type(other.type),
+      persistentUuid(other.persistentUuid) {
   CopyChildren(other);
 }
 
@@ -314,8 +358,10 @@ Variable& Variable::operator=(const Variable& other) {
   if (this != &other) {
     value = other.value;
     str = other.str;
+    folded = other.folded;
     boolVal = other.boolVal;
     type = other.type;
+    persistentUuid = other.persistentUuid;
     CopyChildren(other);
   }
 

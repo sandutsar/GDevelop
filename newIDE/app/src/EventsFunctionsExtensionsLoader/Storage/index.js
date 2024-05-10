@@ -1,12 +1,14 @@
 // @flow
 
 export type EventsFunctionsExtensionOpener = {
-  chooseEventsFunctionExtensionFile: () => Promise<?string>,
-  readEventsFunctionExtensionFile: (filepath: string) => Promise<Object>,
+  chooseEventsFunctionExtensionFile: () => Promise<?any>,
+  readEventsFunctionExtensionFile: (filepath: any) => Promise<Object>,
 };
 
 export type EventsFunctionsExtensionWriter = {
-  chooseEventsFunctionExtensionFile: () => Promise<?string>,
+  chooseEventsFunctionExtensionFile: (
+    extensionName?: string
+  ) => Promise<?string>,
   writeEventsFunctionsExtension: (
     extension: gdEventsFunctionsExtension,
     filepath: string
